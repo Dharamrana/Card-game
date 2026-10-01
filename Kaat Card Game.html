@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#153e35">
+  <title>Kaat Card Game</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --felt: #145447;
+      --felt-dark: #0e3d34;
+      --felt-light: #1d6a58;
+      --ink: #182520;
+      --muted: #62716b;
+      --cream: #fffdf7;
+      --gold: #f1c56b;
+      --red: #c63e43;
+      --line: rgba(255,255,255,.16);
+      --shadow: 0 20px 60px rgba(8, 28, 24, .25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 50% 0%, #276d5e 0%, var(--felt) 45%, var(--felt-dark) 100%);
+      color: var(--cream);
+      font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { width: min(1180px, 100%); margin: 0 auto; padding: 22px clamp(14px, 3vw, 32px) 36px; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:18px; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .brand-mark { width:42px; height:42px; display:grid; place-items:center; border:1px solid #ffffff40; border-radius:14px; background:#ffffff12; color:var(--gold); font-size:23px; }
+    .brand h1 { font-size:18px; margin:0; letter-spacing:.01em; }
+    .brand p { color:#c8ddd4; font-size:12px; margin:1px 0 0; }
+    .top-actions { display:flex; gap:8px; }
+    .button {
+      border:1px solid #ffffff45; border-radius:11px; padding:9px 14px; background:#ffffff12; color:white;
+      transition:transform .12s ease, background .12s ease, border-color .12s ease;
+    }
+    .button:hover { background:#ffffff20; border-color:#ffffff80; transform:translateY(-1px); }
+    .button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    .button.primary { border-color:#f5d78d; background:var(--gold); color:#34250a; font-weight:800; }
+    .button.primary:hover { background:#f7d98f; }
+    .button.small { padding:7px 11px; font-size:13px; }
+    .scorebar { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+    .score-card { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 13px; border:1px solid var(--line); border-radius:14px; background:#082e282e; }
+    .score-name { display:flex; align-items:center; gap:9px; min-width:0; }
+    .avatar { width:29px; height:29px; display:grid; place-items:center; flex:0 0 auto; border-radius:10px; background:#ffffff1b; color:#fff; font-size:14px; }
+    .score-card.you .avatar { color:#34250a; background:var(--gold); }
+    .score-name strong { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; }
+    .score-name span { display:block; color:#c4d8d0; font-size:11px; }
+    .score-points { color:var(--gold); font-size:21px; font-weight:800; font-variant-numeric:tabular-nums; }
+    .score-card.you .score-points { color:#ffe09a; }
+    .panel { color:var(--ink); background:var(--cream); border:1px solid #e9e3d6; border-radius:20px; box-shadow:var(--shadow); overflow:hidden; }
+    .panel-head { padding:20px 24px 16px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; border-bottom:1px solid #ece8df; }
+    .eyebrow { color:#6c7a72; font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .panel-head h2 { margin:3px 0 0; font-size:23px; line-height:1.15; letter-spacing:-.03em; }
+    .panel-head p { color:#64716a; margin:6px 0 0; max-width:700px; }
+    .panel-body { padding:22px 24px 25px; }
+    .round-pill { white-space:nowrap; border-radius:99px; padding:7px 11px; background:#e9f2ed; color:#245b4a; font-size:12px; font-weight:800; }
+    .lobby-grid { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; align-items:stretch; }
+    .lobby-card { border:1px solid #e9e5dc; border-radius:16px; padding:18px; background:#fff; }
+    .lobby-card h3 { margin:0 0 8px; font-size:16px; }
+    .lobby-card p { margin:0 0 14px; color:#68766e; }
+    .field { display:grid; gap:6px; margin:11px 0; }
+    .field label { color:#435149; font-size:12px; font-weight:800; }
+    .field select, .field input { width:100%; padding:11px 12px; border:1px solid #cdd7d0; border-radius:10px; background:white; color:var(--ink); outline:none; }
+    .field select:focus, .field input:focus { border-color:#24725e; box-shadow:0 0 0 3px #24725e20; }
+    .rules { display:grid; gap:9px; margin-top:5px; }
+    .rule-line { display:flex; align-items:flex-start; gap:10px; color:#46544c; font-size:13px; }
+    .rule-icon { width:24px; height:24px; flex:0 0 auto; display:grid; place-items:center; border-radius:8px; background:#e8f2ed; color:#21604d; font-weight:900; }
+    .note { margin-top:14px; padding:11px 12px; border-left:3px solid #dfb450; border-radius:0 9px 9px 0; background:#fff8e5; color:#665326; font-size:12px; }
+    .stage-message { min-height:44px; display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px; background:#edf5f0; color:#315b49; font-weight:700; margin-bottom:17px; }
+    .stage-message .dot { width:9px; height:9px; border-radius:50%; background:#2e8b64; box-shadow:0 0 0 4px #2e8b6420; }
+    .table-layout { display:grid; grid-template-columns:1fr minmax(280px,1.1fr) 1fr; gap:16px; align-items:center; }
+    .seat { min-height:108px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; padding:12px; border:1px solid #e6e6df; border-radius:15px; background:#fafaf6; text-align:center; }
+    .seat.active { border-color:#d5a935; box-shadow:0 0 0 3px #f2ca7025; background:#fff9e9; }
+    .seat-name { font-weight:800; }
+    .seat-sub { color:#77847d; font-size:12px; }
+    .seat-stat { color:#315e4d; font-size:12px; font-weight:700; }
+    .back-cards { display:flex; justify-content:center; margin-top:1px; }
+    .back-card { width:19px; height:27px; margin-left:-5px; border:1px solid #f3d891; border-radius:4px; background:repeating-linear-gradient(135deg,#245d50,#245d50 3px,#347562 3px,#347562 6px); }
+    .table-center { min-height:245px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:16px; border:1px dashed #b9c8be; border-radius:18px; background:linear-gradient(145deg,#f4f7f2,#eaf1eb); }
+    .table-info { color:#69766f; font-size:12px; text-align:center; }
+    .trick-cards { width:100%; min-height:130px; display:grid; grid-template-columns:1fr 1fr; gap:7px; align-items:center; justify-items:center; }
+    .played { min-width:94px; display:flex; flex-direction:column; align-items:center; gap:3px; color:#5f6f66; font-size:11px; }
+    .playing-card { width:70px; height:96px; display:flex; flex-direction:column; justify-content:space-between; padding:8px 8px 7px; border:1px solid #dedbd4; border-radius:10px; background:#fff; box-shadow:0 5px 12px #132f241c; color:#202923; text-align:left; }
+    .playing-card .corner { display:flex; flex-direction:column; align-items:center; width:max-content; font-weight:800; line-height:1; }
+    .playing-card .rank { font-size:19px; }
+    .playing-card .suit { font-size:16px; }
+    .playing-card .center-suit { align-self:center; font-size:26px; opacity:.88; }
+    .playing-card.red { color:var(--red); }
+    .playing-card.back { border:2px solid #f1d184; background:repeating-linear-gradient(135deg,#1d594b,#1d594b 5px,#2b6e5b 5px,#2b6e5b 10px); }
+    .hand-area { margin-top:18px; padding:16px; border:1px solid #e8e4da; border-radius:16px; background:#faf9f5; }
+    .hand-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+    .hand-head h3 { margin:0; font-size:15px; }
+    .hand-head span { color:#6c7a72; font-size:12px; }
+    .hand { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+    .hand .playing-card { width:67px; height:93px; padding:7px; transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease; }
+    .hand .playing-card.playable:hover { transform:translateY(-7px); box-shadow:0 11px 18px #132f2428; border-color:#c9a54a; }
+    .hand .playing-card.disabled { opacity:.5; cursor:not-allowed; }
+    .hand .playing-card.playable { cursor:pointer; }
+    .hand-empty { padding:20px; color:#77847d; font-size:13px; }
+    .bid-panel { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:end; padding:15px; border:1px solid #e4e9e2; border-radius:14px; background:#f7faf6; }
+    .bid-panel .field { margin:0; max-width:240px; }
+    .bid-total { padding-bottom:11px; color:#4d5b53; font-size:13px; }
+    .bid-total strong { color:#245b4a; font-size:18px; }
+    .bids { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; }
+    .bid-chip { padding:9px 10px; border:1px solid #e7e8e0; border-radius:10px; background:white; color:#536159; font-size:12px; }
+    .bid-chip strong { display:block; color:#21382e; font-size:16px; }
+    .summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:12px 0 19px; }
+    .summary-card { padding:14px; border:1px solid #e8e6dd; border-radius:14px; background:white; }
+    .summary-card strong { display:block; font-size:13px; }
+    .summary-card .big { display:block; margin:5px 0; color:#245b4a; font-size:25px; font-weight:900; }
+    .summary-card small { color:#738078; }
+    .score-result { width:100%; border-collapse:collapse; margin:8px 0 18px; }
+    .score-result th, .score-result td { padding:10px 12px; border-bottom:1px solid #e7e8e2; text-align:left; }
+    .score-result th { color:#68756e; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+    .score-result td:last-child, .score-result th:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+    .row-positive { color:#1c7954; font-weight:800; }
+    .row-negative { color:#b13c43; font-weight:800; }
+    .footer { margin-top:13px; color:#d1e0da; text-align:center; font-size:11px; }
+    .muted { color:#728078; }
+    .suit-red { color:var(--red); }
+    .live { min-height:18px; color:#607068; font-size:12px; }
+    .turn-tag { padding:4px 8px; border-radius:99px; background:#dff1e6; color:#225c45; font-size:11px; font-weight:800; }
+    .online-lobby-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .online-box { padding:17px; border:1px solid #e9e5dc; border-radius:15px; background:#fff; }
+    .online-box h3 { margin:0 0 7px; font-size:16px; }
+    .online-box p { color:#68766e; margin:0 0 10px; font-size:13px; }
+    .online-status { margin-top:12px; padding:10px 12px; border-radius:10px; background:#edf5f0; color:#315b49; font-size:13px; }
+    .room-code { margin:10px 0; color:#205b48; font-size:32px; font-weight:900; letter-spacing:.18em; }
+    .online-seats { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin:15px 0; }
+    .online-seat { min-height:80px; padding:12px; border:1px solid #e4e7df; border-radius:12px; background:#fafaf6; }
+    .online-seat strong, .online-seat span { display:block; }
+    .online-seat span { margin-top:5px; color:#6c7a72; font-size:12px; }
+    .online-seat.current { border-color:#d5a935; background:#fff9e9; }
+    .online-trick { min-height:130px; }
+    .online-error { color:#9d3038; background:#fff0ef; }
+    .timer-pill { display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:99px; background:#fff1ce; color:#6b4b04; font-weight:900; font-variant-numeric:tabular-nums; }
+    .timer-pill.urgent { background:#ffe2df; color:#a22e34; }
+    .online-hand { margin-top:18px; }
+    details { margin-top:18px; color:#d6e4dc; }
+    details summary { cursor:pointer; font-weight:800; }
+    details .details-body { display:grid; grid-template-columns:repeat(2,1fr); gap:8px 24px; padding:10px 0 0; color:#d6e4dc; font-size:12px; }
+    @media (max-width:760px) {
+      .scorebar { grid-template-columns:repeat(2,1fr); }
+      .lobby-grid { grid-template-columns:1fr; }
+      .online-lobby-grid { grid-template-columns:1fr; }
+      .online-seats { grid-template-columns:repeat(2,1fr); }
+      .table-layout { grid-template-columns:1fr 1fr; gap:9px; }
+      .table-center { grid-column:1/-1; grid-row:2; min-height:210px; }
+      .seat { min-height:92px; }
+      .summary-grid { grid-template-columns:repeat(2,1fr); }
+      .panel-head { padding:17px 17px 14px; }
+      .panel-body { padding:16px; }
+    }
+    @media (max-width:460px) {
+      .app { padding:13px 10px 25px; }
+      .topbar { align-items:flex-start; }
+      .brand p { display:none; }
+      .button.small { padding:7px 8px; }
+      .score-card { padding:9px; }
+      .score-name strong { font-size:12px; }
+      .score-points { font-size:18px; }
+      .hand { gap:5px; }
+      .hand .playing-card { width:56px; height:80px; padding:6px; }
+      .hand .playing-card .rank { font-size:16px; }
+      .hand .playing-card .suit { font-size:13px; }
+      .hand .playing-card .center-suit { font-size:21px; }
+      .playing-card { width:60px; height:82px; }
+      .playing-card .rank { font-size:16px; }
+      .playing-card .suit { font-size:13px; }
+      .playing-card .center-suit { font-size:21px; }
+      .bid-panel { grid-template-columns:1fr; }
+      .bid-panel .field { max-width:none; }
+      .bid-total { padding:0; }
+      .bids { grid-template-columns:repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">♠</div>
+        <div><h1>Kaat</h1><p>Four-player card table</p></div>
+      </div>
+      <div class="top-actions">
+        <button class="button small" id="rulesBtn" type="button">Rules</button>
+        <button class="button small" id="playOnlineBtn" type="button">Play online</button>
+        <button class="button small" id="newGameBtn" type="button">New game</button>
+      </div>
+    </header>
+    <section id="scorebar" class="scorebar" aria-label="Match scores"></section>
+    <section id="screen"></section>
+    <section id="onlineScreen" hidden></section>
+    <details>
+      <summary>Quick rules</summary>
+      <div class="details-body">
+        <span>Each player gets 13 cards. Every hand is redealt until all four players hold at least one card of every suit.</span>
+        <span>The caller chooses a kaat suit, starts the first trick, and bids at least 6 ghar. Other players bid at least 2.</span>
+        <span>Follow the lead suit if you can. If you cannot, play kaat or any card.</span>
+        <span>Kaat beats non-kaat. Without kaat, the highest card in the lead suit wins. Rank order is A, K, Q, J, 10 down to 2.</span>
+        <span>The trick winner takes one ghar and leads next. Make your bid or more for plus bid points; miss it for minus bid points.</span>
+        <span>When total bids are below 14, the table raises bids by one in seat order until total bids reach at least 14. First to +21 wins.</span>
+      </div>
+    </details>
+    <div class="footer">A local game for one player and three computer opponents. No account or network needed.</div>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+      const suits = [
+        { key: "S", symbol: "♠", name: "Spades", red: false },
+        { key: "H", symbol: "♥", name: "Hearts", red: true },
+        { key: "C", symbol: "♣", name: "Clubs", red: false },
+        { key: "D", symbol: "♦", name: "Diamonds", red: true }
+      ];
+      const ranks = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+      const rankValue = Object.fromEntries(ranks.map((rank, index) => [rank, index + 2]));
+      const seatNames = ["You", "Bot 1", "Bot 2", "Bot 3"];
+      const $ = (id) => document.getElementById(id);
+      const scorebar = $("scorebar");
+      const screen = $("screen");
+      let state = null;
+      let aiTimer = null;
+      let onlineMode = false;
+      let onlineSocket = null;
+      let onlineState = null;
+      let onlineSeat = null;
+      let onlineRoomCode = "";
+      let onlineToken = "";
+      let onlineError = "";
+      let onlineIntent = false;
+      let onlineTimerInterval = null;
+      let queuedOnlineAction = null;
+
+      function cardText(card) { return `${card.rank}${suits.find(s => s.key === card.suit).symbol}`; }
+      function readStorage(storage, key) { try { return storage.getItem(key) || ""; } catch { return ""; } }
+      function writeStorage(storage, key, value) { try { storage.setItem(key, value); } catch {} }
+      function clearStorage(storage, key) { try { storage.removeItem(key); } catch {} }
+      function suitInfo(key) { return suits.find(s => s.key === key); }
+      function suitName(key) { return suitInfo(key).name; }
+      function isRed(card) { return suitInfo(card.suit).red; }
+      function sortHand(hand) {
+        const order = Object.fromEntries(suits.map((s, i) => [s.key, i]));
+        return hand.sort((a, b) => order[a.suit] - order[b.suit] || rankValue[b.rank] - rankValue[a.rank]);
+      }
+      function shuffledDeck() {
+        const deck = suits.flatMap(suit => ranks.map(rank => ({ suit: suit.key, rank })));
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+      }
+      function hasAllSuits(hand) {
+        const found = new Set(hand.map(c => c.suit));
+        return suits.every(s => found.has(s.key));
+      }
+      function dealValidHands() {
+        let hands;
+        do {
+          const deck = shuffledDeck();
+          hands = Array.from({ length: 4 }, (_, i) => sortHand(deck.slice(i * 13, (i + 1) * 13)));
+        } while (!hands.every(hasAllSuits));
+        return hands;
+      }
+      function newMatch() {
+        clearTimeout(aiTimer);
+        state = { scores: [0, 0, 0, 0], handNo: 0, caller: 0, phase: "lobby" };
+        render();
+      }
+      function startFreshMatch() {
+        showSolo();
+        newMatch();
+        nextHand(0);
+      }
+      function nextHand(caller) {
+        clearTimeout(aiTimer);
+        const scores = state.scores.slice();
+        const handNo = state.handNo + 1;
+        state = {
+          scores, handNo, caller,
+          hands: dealValidHands(), trump: null, bids: [null, null, null, null],
+          tricks: [0, 0, 0, 0], trick: [], leader: caller, turn: caller,
+          phase: "call", message: "Dealing cards… checking all four hands for every suit."
+        };
+        if (caller !== 0) {
+          state.trump = chooseBotTrump(caller);
+          state.bids = chooseBids();
+          state.phase = "bid";
+        }
+        render();
+      }
+      function suitStrength(hand, suit) {
+        const cards = hand.filter(c => c.suit === suit);
+        return cards.length * 1.15 + cards.reduce((sum, c) => sum + (rankValue[c.rank] >= 12 ? .55 : rankValue[c.rank] >= 10 ? .2 : 0), 0);
+      }
+      function chooseBotTrump(player) {
+        return suits.map(s => ({ key: s.key, score: suitStrength(state.hands[player], s.key) }))
+          .sort((a, b) => b.score - a.score)[0].key;
+      }
+      function estimateBid(player, trump) {
+        const hand = state.hands[player];
+        let strength = 0;
+        for (const c of hand) {
+          if (c.rank === "A") strength += c.suit === trump ? 1.4 : 1;
+          else if (c.rank === "K") strength += c.suit === trump ? 1.1 : .65;
+          else if (c.rank === "Q") strength += c.suit === trump ? .8 : .35;
+          if (c.suit === trump && rankValue[c.rank] >= 8) strength += .32;
+        }
+        const minimum = player === state.caller ? 6 : 2;
+        return Math.min(13, Math.max(minimum, Math.round(2 + strength * .48)));
+      }
+      function chooseBids() {
+        const bids = [null, null, null, null];
+        for (let p = 0; p < 4; p++) if (p !== 0) bids[p] = estimateBid(p, state.trump);
+        return bids;
+      }
+      function totalBids(bids) { return bids.reduce((sum, n) => sum + (Number(n) || 0), 0); }
+      function raiseBidsToFourteen(bids) {
+        const adjusted = bids.slice();
+        let total = totalBids(adjusted);
+        while (total < 14) {
+          for (let p = 0; p < 4 && total < 14; p++) {
+            adjusted[p] += 1;
+            total += 1;
+          }
+        }
+        return adjusted;
+      }
+      function lockBid() {
+        const input = $("bidInput");
+        const bid = Number(input.value);
+        const minimum = state.caller === 0 ? 6 : 2;
+        if (!Number.isInteger(bid) || bid < minimum || bid > 13) {
+          input.setCustomValidity(`Bid ${minimum} to 13 ghar.`);
+          input.reportValidity();
+          return;
+        }
+        input.setCustomValidity("");
+        state.bids[0] = bid;
+        const before = totalBids(state.bids);
+        state.bids = raiseBidsToFourteen(state.bids);
+        state.turn = state.caller;
+        state.leader = state.caller;
+        state.phase = "play";
+        state.message = before < 14
+          ? `Combined bids were ${before}. Each seat raised by one ghar in turn until the table reached ${totalBids(state.bids)}.`
+          : `Bids are locked at ${before} total. The caller leads the first trick.`;
+        render();
+        runBotIfNeeded();
+      }
+      function legalCards(player) {
+        const hand = state.hands[player];
+        if (!state.trick.length) return hand.map((card, index) => ({ card, index }));
+        const leadSuit = state.trick[0].card.suit;
+        const following = hand.map((card, index) => ({ card, index })).filter(x => x.card.suit === leadSuit);
+        return following.length ? following : hand.map((card, index) => ({ card, index }));
+      }
+      function compareCards(a, b) { return rankValue[a.rank] - rankValue[b.rank]; }
+      function currentWinningPlay(plays) {
+        if (!plays.length) return null;
+        const trumpPlays = plays.filter(play => play.card.suit === state.trump);
+        const eligible = trumpPlays.length ? trumpPlays : plays.filter(play => play.card.suit === plays[0].card.suit);
+        return eligible.reduce((best, play) => compareCards(play.card, best.card) > 0 ? play : best);
+      }
+      function winningPlay(plays) {
+        const trumpPlays = plays.filter(play => play.card.suit === state.trump);
+        const eligible = trumpPlays.length ? trumpPlays : plays.filter(play => play.card.suit === plays[0].card.suit);
+        return eligible.reduce((best, play) => compareCards(play.card, best.card) > 0 ? play : best);
+      }
+      function beats(play, current) {
+        if (!current) return true;
+        if (play.card.suit === state.trump && current.card.suit !== state.trump) return true;
+        if (play.card.suit !== state.trump && current.card.suit === state.trump) return false;
+        if (play.card.suit === current.card.suit) return rankValue[play.card.rank] > rankValue[current.card.rank];
+        return false;
+      }
+      function chooseBotCard(player) {
+        const options = legalCards(player);
+        const current = currentWinningPlay(state.trick);
+        const needs = state.tricks[player] < state.bids[player];
+        const winning = options.filter(option => beats({ card: option.card }, current));
+        if (needs && winning.length) {
+          return winning.sort((a, b) => rankValue[a.card.rank] - rankValue[b.card.rank])[0];
+        }
+        const nonWinning = options.filter(option => !beats({ card: option.card }, current));
+        const pool = nonWinning.length ? nonWinning : options;
+        return pool.slice().sort((a, b) => rankValue[a.card.rank] - rankValue[b.card.rank])[0];
+      }
+      function playCard(player, index) {
+        if (state.phase !== "play" || player !== state.turn) return;
+        const legal = legalCards(player);
+        if (!legal.some(option => option.index === index)) return;
+        const [card] = state.hands[player].splice(index, 1);
+        state.trick.push({ player, card });
+        state.message = `${seatNames[player]} played ${cardText(card)}.`;
+        if (state.trick.length === 4) {
+          const winner = winningPlay(state.trick).player;
+          state.tricks[winner] += 1;
+          state.lastTrick = state.trick.slice();
+          state.lastWinner = winner;
+          state.phase = "trickEnd";
+          state.message = `${seatNames[winner]} won the ghar and will lead the next baari.`;
+          render();
+          return;
+        }
+        state.turn = (player + 1) % 4;
+        render();
+        runBotIfNeeded();
+      }
+      function runBotIfNeeded() {
+        if (!state || state.phase !== "play" || state.turn === 0) return;
+        clearTimeout(aiTimer);
+        aiTimer = setTimeout(() => {
+          if (!state || state.phase !== "play" || state.turn === 0) return;
+          const choice = chooseBotCard(state.turn);
+          playCard(state.turn, choice.index);
+        }, 560);
+      }
+      function continueAfterTrick() {
+        if (state.hands.every(hand => hand.length === 0)) {
+          finishHand();
+          return;
+        }
+        state.trick = [];
+        state.leader = state.lastWinner;
+        state.turn = state.lastWinner;
+        state.phase = "play";
+        state.message = `${seatNames[state.turn]} leads the next baari.`;
+        render();
+        runBotIfNeeded();
+      }
+      function finishHand() {
+        const deltas = state.bids.map((bid, p) => state.tricks[p] >= bid ? bid : -bid);
+        state.scores = state.scores.map((score, p) => score + deltas[p]);
+        const winners = state.scores.map((score, p) => score >= 21 ? p : -1).filter(p => p >= 0);
+        state.matchWinner = winners.length ? winners[0] : null;
+        state.phase = state.matchWinner === null ? "summary" : "gameover";
+        state.message = state.matchWinner === null ? "Hand complete. Scores have been added." : `${seatNames[state.matchWinner]} reached +21 and won the match!`;
+        render();
+      }
+      function cardMarkup(card, extra = "") {
+        const red = isRed(card) ? " red" : "";
+        return `<div class="playing-card${red}${extra}" aria-label="${cardText(card)}"><div class="corner"><span class="rank">${card.rank}</span><span class="suit">${suitInfo(card.suit).symbol}</span></div><span class="center-suit">${suitInfo(card.suit).symbol}</span></div>`;
+      }
+      function scoreMarkup() {
+        scorebar.innerHTML = seatNames.map((name, p) => {
+          const currentBid = state && state.bids ? state.bids[p] : null;
+          const detail = state && state.phase !== "lobby" && state.phase !== "summary" && state.phase !== "gameover"
+            ? `${state.tricks ? state.tricks[p] : 0} ghar${currentBid !== null ? ` · bid ${currentBid}` : ""}`
+            : "match points";
+          return `<div class="score-card ${p === 0 ? "you" : ""}"><div class="score-name"><div class="avatar">${p === 0 ? "●" : "♟"}</div><div><strong>${name}</strong><span>${detail}</span></div></div><div class="score-points">${state ? state.scores[p] : 0}</div></div>`;
+        }).join("");
+      }
+      function header(title, desc, badge = "") {
+        return `<div class="panel-head"><div><div class="eyebrow">Kaat card game</div><h2>${title}</h2><p>${desc}</p></div>${badge ? `<span class="round-pill">${badge}</span>` : ""}</div>`;
+      }
+      function renderLobby() {
+        screen.innerHTML = `<section class="panel">${header("Ready for a hand?", "Play with three computer opponents. Your match score carries across hands until someone reaches +21.")}
+          <div class="panel-body"><div class="lobby-grid">
+            <div class="lobby-card"><h3>Choose the kaat caller</h3><p>The caller chooses a suit, bids at least 6 ghar, and leads the first card. You can let a bot call this hand too.</p>
+              <div class="field"><label for="callerSelect">Caller for hand ${state.handNo + 1}</label><select id="callerSelect">${seatNames.map((n,p)=>`<option value="${p}" ${p === state.caller ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+              <button class="button primary" id="dealBtn" type="button">Deal cards</button>
+            </div>
+            <div class="lobby-card"><h3>Quick setup</h3><div class="rules">
+              <div class="rule-line"><span class="rule-icon">52</span><span>52 cards, 4 players, 13 cards each.</span></div>
+              <div class="rule-line"><span class="rule-icon">4</span><span>Each hand is checked so every player has at least one card in all four suits.</span></div>
+              <div class="rule-line"><span class="rule-icon">14</span><span>Combined bids must be at least 14. If they are short, everyone raises by one in seat order until the total is met.</span></div>
+              <div class="rule-line"><span class="rule-icon">21</span><span>Make your bid or more for plus bid points; miss it for minus bid points. First to +21 wins.</span></div>
+            </div><div class="note">This game follows the rulebook. The caller for each hand is selected here because the rulebook does not specify a caller rotation.</div></div>
+          </div></div></section>`;
+        $("dealBtn").addEventListener("click", () => nextHand(Number($("callerSelect").value)));
+      }
+      function renderCall() {
+        const callerName = seatNames[state.caller];
+        screen.innerHTML = `<section class="panel">${header("Choose the kaat suit", `${callerName} is calling kaat and will lead the first baari. Choose one suit as kaat.`, `Hand ${state.handNo}`)}
+          <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>
+          ${renderTable()}
+          <div class="hand-area"><div class="hand-head"><h3>Your cards</h3><span>13 cards · all four suits checked</span></div><div class="hand">${renderHandCards(false)}</div></div>
+          <div class="bid-panel" style="margin-top:15px"><div class="field"><label for="trumpSelect">Kaat suit</label><select id="trumpSelect">${suits.map(s=>`<option value="${s.key}">${s.symbol} ${s.name}</option>`).join("")}</select></div><button class="button primary" id="chooseTrumpBtn" type="button">Set kaat</button></div></div></section>`;
+        $("chooseTrumpBtn").addEventListener("click", () => {
+          state.trump = $("trumpSelect").value;
+          state.bids = chooseBids();
+          state.phase = "bid";
+          state.message = `${callerName} called ${suitName(state.trump)} as kaat. Everyone now says their ghar.`;
+          render();
+        });
+      }
+      function renderBid() {
+        const trump = suitInfo(state.trump);
+        const minimum = state.caller === 0 ? 6 : 2;
+        const botBids = state.bids.map((bid, p) => p === 0 ? null : bid);
+        const guessedTotal = botBids.reduce((sum, n) => sum + (n || 0), 0);
+        screen.innerHTML = `<section class="panel">${header("Call your ghar", `${seatNames[state.caller]} called ${trump.symbol} ${trump.name} as kaat. ${seatNames[state.caller]} leads the first baari.`, `Hand ${state.handNo}`)}
+          <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>${renderTable()}
+          <div class="hand-area"><div class="hand-head"><h3>Your cards</h3><span>Your minimum bid is ${minimum}</span></div><div class="hand">${renderHandCards(false)}</div>
+            <div class="bid-panel" style="margin-top:14px"><div class="field"><label for="bidInput">Your ghar bid</label><input id="bidInput" type="number" min="${minimum}" max="13" value="${minimum}" step="1"><span class="muted">Enter ${minimum} to 13. A caller must bid at least 6.</span></div><div><div class="bid-total">Bots have called <strong>${guessedTotal}</strong> so far. Table minimum: <strong>14</strong>.</div><button class="button primary" id="lockBidBtn" type="button">Lock bids and start</button></div></div>
+            <div class="bids">${seatNames.map((n,p)=>`<div class="bid-chip">${n}${p===state.caller?" · caller":""}<strong>${p===0?"Your bid":state.bids[p]+" ghar"}</strong></div>`).join("")}</div>
+          </div></div></section>`;
+        $("lockBidBtn").addEventListener("click", lockBid);
+      }
+      function renderTable() {
+        const plays = state.trick || [];
+        const caller = state.caller;
+        const active = state.phase === "play" ? state.turn : null;
+        const seat = (p, label) => `<div class="seat ${active === p ? "active" : ""}"><div class="seat-name">${seatNames[p]} ${p === caller ? "★" : ""}</div><div class="seat-sub">${label}</div><div class="seat-stat">${state.tricks[p]} ghar${state.bids[p] !== null ? ` · bid ${state.bids[p]}` : ""}</div>${p !== 0 ? `<div class="back-cards">${Array.from({length:Math.min(state.hands[p].length,6)},()=>`<span class="back-card"></span>`).join("")}</div>` : ""}</div>`;
+        const playAt = (p) => {
+          const play = plays.find(x => x.player === p);
+          return play ? `<div class="played">${cardMarkup(play.card)}<span>${seatNames[p]}</span></div>` : `<div class="played"><div class="playing-card back"></div><span>${seatNames[p]}</span></div>`;
+        };
+        const centerInfo = state.trump ? `${suitInfo(state.trump).symbol} ${suitName(state.trump)} is kaat` : "Kaat suit not chosen yet";
+        const turnInfo = state.phase === "play" ? (state.turn === 0 ? "Your turn" : `${seatNames[state.turn]} is thinking…`) : `${plays.length} of 4 cards played`;
+        return `<div class="table-layout">${seat(1, "left of you")}${seat(2, "across the table")}<div class="table-center"><div class="table-info">${centerInfo}<br>${turnInfo}</div><div class="trick-cards">${playAt(1)}${playAt(2)}${playAt(0)}${playAt(3)}</div></div>${seat(3, "right of you")}${seat(0, "your seat")}</div>`;
+      }
+      function renderHandCards(allowPlay) {
+        if (!state.hands[0].length) return `<div class="hand-empty">All your cards have been played this hand.</div>`;
+        const allowed = allowPlay ? new Set(legalCards(0).map(x=>x.index)) : new Set();
+        return state.hands[0].map((card,index) => {
+          const can = allowPlay && state.turn === 0 && allowed.has(index);
+          const cls = `${isRed(card)?" red":""}${can?" playable":" disabled"}`;
+          return `<button class="playing-card${cls}" data-card-index="${index}" type="button" ${can?"":"disabled"} aria-label="Play ${cardText(card)}"><span class="corner"><span class="rank">${card.rank}</span><span class="suit">${suitInfo(card.suit).symbol}</span></span><span class="center-suit">${suitInfo(card.suit).symbol}</span></button>`;
+        }).join("");
+      }
+      function renderPlay() {
+        const caller = seatNames[state.caller];
+        const lead = state.trick.length ? suitInfo(state.trick[0].card.suit) : null;
+        const hint = state.turn === 0
+          ? (lead && state.hands[0].some(c=>c.suit===lead.key) ? `Follow suit: play ${lead.symbol} ${lead.name}.` : lead ? `You have no ${lead.name}; play kaat or any card.` : "Choose any card to lead this baari.")
+          : `${seatNames[state.turn]} is deciding a card…`;
+        screen.innerHTML = `<section class="panel">${header("Baari in play", `${caller} called kaat. Winner of each baari takes one ghar and leads next.`, `Hand ${state.handNo} · ${13-state.hands[0].length}/13 played`)}
+          <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>${renderTable()}
+          <div class="hand-area"><div class="hand-head"><h3>Your cards</h3><span class="turn-tag">${hint}</span></div><div class="hand">${renderHandCards(true)}</div></div>
+          <div class="live" aria-live="polite">Kaat suit: <strong>${suitInfo(state.trump).symbol} ${suitName(state.trump)}</strong> · Lead suit: <strong>${lead ? `${lead.symbol} ${lead.name}` : "not led"}</strong></div></div></section>`;
+        screen.querySelectorAll("[data-card-index]").forEach(button => button.addEventListener("click", () => playCard(0, Number(button.dataset.cardIndex))));
+      }
+      function renderTrickEnd() {
+        screen.innerHTML = `<section class="panel">${header("Baari complete", `${seatNames[state.lastWinner]} took this ghar and leads the next baari.`, `Hand ${state.handNo} · ${state.tricks.reduce((a,b)=>a+b,0)}/13 ghar`)}
+          <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>${renderTable()}
+          <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="button primary" id="continueBtn" type="button">Next baari</button></div></div></section>`;
+        $("continueBtn").addEventListener("click", continueAfterTrick);
+      }
+      function renderSummary() {
+        const rows = seatNames.map((name,p)=>{
+          const delta = state.tricks[p] >= state.bids[p] ? state.bids[p] : -state.bids[p];
+          return `<tr><td>${name}${p===state.caller?" · caller":""}</td><td>${state.bids[p]}</td><td>${state.tricks[p]}</td><td class="${delta>=0?"row-positive":"row-negative"}">${delta>0?"+":""}${delta}</td><td>${state.scores[p]}</td></tr>`;
+        }).join("");
+        screen.innerHTML = `<section class="panel">${header(`Hand ${state.handNo} scored`, "Bids made or exceeded earn the bid points. Bids missed lose the bid points.", `13 ghar played`)}
+          <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>
+          <table class="score-result"><thead><tr><th>Player</th><th>Bid</th><th>Ghar</th><th>Points</th><th>Match total</th></tr></thead><tbody>${rows}</tbody></table>
+          <div class="note">Combined bids this hand: ${totalBids(state.bids)}. Match ends when a player reaches +21.</div>
+          <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="button primary" id="nextHandBtn" type="button">Deal next hand</button></div></div></section>`;
+        $("nextHandBtn").addEventListener("click", () => {
+          const nextCaller = (state.caller + 1) % 4;
+          state.caller = nextCaller;
+          state.phase = "lobby";
+          state.message = "";
+          render();
+        });
+      }
+      function renderGameOver() {
+        const rows = seatNames.map((name,p)=>`<tr><td>${name}</td><td>${state.scores[p]}</td></tr>`).join("");
+        screen.innerHTML = `<section class="panel">${header(`${seatNames[state.matchWinner]} wins!`, "A player reached +21 match points.", `Hand ${state.handNo}`)}
+          <div class="panel-body"><div class="summary-grid">${seatNames.map((name,p)=>`<div class="summary-card"><strong>${name}</strong><span class="big">${state.scores[p]}</span><small>match points</small></div>`).join("")}</div>
+          <button class="button primary" id="playAgainBtn" type="button">Play another match</button></div></section>`;
+        $("playAgainBtn").addEventListener("click", startFreshMatch);
+      }
+      function showOnline() {
+        onlineMode = true;
+        scorebar.hidden = true;
+        scorebar.style.display = "none";
+        screen.hidden = true;
+        document.querySelector("details").hidden = true;
+        document.querySelector(".footer").hidden = true;
+        $("onlineScreen").hidden = false;
+        if (onlineState) renderOnlineRoom();
+        else {
+          onlineRoomCode = onlineRoomCode || readStorage(sessionStorage, "kaat.roomCode");
+          onlineToken = onlineToken || readStorage(sessionStorage, "kaat.playerToken");
+          renderOnlineLobby();
+          if (onlineRoomCode && onlineToken) connectOnline({ type: "join_room", code: onlineRoomCode, token: onlineToken, name: readStorage(sessionStorage, "kaat.playerName") || "Player" });
+        }
+      }
+      function showSolo() {
+        onlineMode = false;
+        if (onlineTimerInterval) clearInterval(onlineTimerInterval);
+        $("onlineScreen").hidden = true;
+        scorebar.hidden = false;
+        scorebar.style.display = "grid";
+        screen.hidden = false;
+        document.querySelector("details").hidden = false;
+        document.querySelector(".footer").hidden = false;
+      }
+      function onlineWsAddress() {
+        const field = $("onlineServerAddress");
+        if (field && field.value.trim()) return field.value.trim().replace(/\/$/, "");
+        if (location.protocol === "https:") return `wss://${location.host}`;
+        if (location.protocol === "http:") return `ws://${location.host}`;
+        return "ws://localhost:8080";
+      }
+      function sendOnline(data) {
+        if (onlineSocket && onlineSocket.readyState === WebSocket.OPEN) {
+          onlineSocket.send(JSON.stringify(data));
+          return true;
+        }
+        onlineError = "Not connected to the game server. Reconnect and try again.";
+        if (onlineMode) renderOnlineLobby();
+        return false;
+      }
+      function connectOnline(action) {
+        const nameInput = $("onlinePlayerName");
+        const playerName = (nameInput ? nameInput.value : readStorage(localStorage, "kaat.playerName") || "Player").trim().slice(0, 18) || "Player";
+        writeStorage(localStorage, "kaat.playerName", playerName);
+        onlineError = "Connecting to the game server…";
+        onlineIntent = true;
+        queuedOnlineAction = action;
+        if (onlineSocket && onlineSocket.readyState === WebSocket.OPEN) {
+          if (action.type === "join_room" && onlineToken && action.code === onlineRoomCode) action.token = onlineToken;
+          onlineSocket.send(JSON.stringify(action));
+          queuedOnlineAction = null;
+          renderOnlineLobby();
+          return;
+        }
+        try {
+          onlineSocket = new WebSocket(onlineWsAddress());
+        } catch {
+          onlineError = "That server address is not valid. Check the address and try again.";
+          renderOnlineLobby();
+          return;
+        }
+        onlineSocket.addEventListener("open", () => {
+          const outgoing = queuedOnlineAction;
+          queuedOnlineAction = null;
+          if (outgoing && outgoing.type === "join_room" && onlineToken && outgoing.code === onlineRoomCode) outgoing.token = onlineToken;
+          if (outgoing) onlineSocket.send(JSON.stringify(outgoing));
+          onlineError = "Connected. Joining the room…";
+          if (onlineMode) renderOnlineLobby();
+        });
+        onlineSocket.addEventListener("message", event => {
+          let payload;
+          try { payload = JSON.parse(event.data); } catch { return; }
+          if (payload.type === "joined") {
+            onlineRoomCode = payload.code;
+            onlineSeat = payload.seat;
+            onlineToken = payload.token;
+            writeStorage(sessionStorage, "kaat.roomCode", onlineRoomCode);
+            writeStorage(sessionStorage, "kaat.playerToken", onlineToken);
+            writeStorage(sessionStorage, "kaat.playerName", playerName);
+            onlineError = "";
+          } else if (payload.type === "room_state") {
+            onlineState = payload.state;
+            onlineRoomCode = payload.state.code;
+            onlineError = "";
+            if (onlineMode) renderOnlineRoom();
+          } else if (payload.type === "error") {
+            onlineError = payload.message;
+            if (onlineMode) renderOnlineRoom();
+          } else if (payload.type === "notice") {
+            onlineError = payload.message;
+            if (onlineMode) renderOnlineRoom();
+          } else if (payload.type === "room_closed") {
+            onlineState = null;
+            onlineRoomCode = "";
+            onlineToken = "";
+            clearStorage(sessionStorage, "kaat.roomCode");
+            clearStorage(sessionStorage, "kaat.playerToken");
+            onlineError = payload.bySeat === onlineSeat ? "You closed the room." : "The room creator closed this room.";
+            if (onlineMode) renderOnlineLobby();
+          } else if (payload.type === "left_room") {
+            onlineState = null;
+            onlineRoomCode = "";
+            onlineToken = "";
+            onlineSeat = null;
+            clearStorage(sessionStorage, "kaat.roomCode");
+            clearStorage(sessionStorage, "kaat.playerToken");
+            onlineError = "You left the room.";
+            if (onlineMode) renderOnlineLobby();
+          }
+        });
+        onlineSocket.addEventListener("close", () => {
+          if (!onlineIntent) return;
+          onlineError = "Connection lost. Reconnecting…";
+          if (onlineMode) renderOnlineLobby();
+          if (onlineRoomCode && onlineToken) {
+            setTimeout(() => {
+              if (!onlineIntent || (onlineSocket && onlineSocket.readyState === WebSocket.OPEN)) return;
+              const name = readStorage(sessionStorage, "kaat.playerName") || "Player";
+              connectOnline({ type: "join_room", code: onlineRoomCode, token: onlineToken, name });
+            }, 1800);
+          }
+        });
+        onlineSocket.addEventListener("error", () => {
+          onlineError = "Could not reach the server. Confirm the game is deployed or the local server is running.";
+          if (onlineMode) renderOnlineLobby();
+        });
+        renderOnlineLobby();
+      }
+      function renderOnlineLobby() {
+        if (onlineTimerInterval) clearInterval(onlineTimerInterval);
+        const savedName = readStorage(localStorage, "kaat.playerName");
+        $("onlineScreen").innerHTML = `<section class="panel">${header("Play with friends", "Create a room and share its code, or join a friend’s room. Four players are needed to deal.", "Online")}
+          <div class="panel-body"><div class="online-lobby-grid">
+            <div class="online-box"><h3>Create a room</h3><p>You’ll be the room creator. Share the five-character code with three friends.</p>
+              <div class="field"><label for="onlinePlayerName">Your display name</label><input id="onlinePlayerName" maxlength="18" value="${savedName.replace(/[&<>\"]/g, "")}" placeholder="e.g. Dharam"></div>
+              ${location.protocol === "file:" ? `<div class="field"><label for="onlineServerAddress">Game server address</label><input id="onlineServerAddress" value="ws://localhost:8080" placeholder="wss://your-game-host"></div><p>For online friends, enter the public server address after deployment.</p>` : ""}
+              <button class="button primary" id="createRoomBtn" type="button">Create room</button>
+            </div>
+            <div class="online-box"><h3>Join a room</h3><p>Enter the room code your friend shared with you.</p>
+              <div class="field"><label for="joinRoomCode">Room code</label><input id="joinRoomCode" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase"></div>
+              <button class="button primary" id="joinRoomBtn" type="button">Join room</button>
+            </div>
+          </div><div class="online-status ${onlineError && /could not|not valid|not reach/i.test(onlineError) ? "online-error" : ""}" role="status">${onlineError || "Create a room to play. Your friends need this same hosted game address to join with its code."}</div>
+          <button class="button" id="backToSoloBtn" type="button" style="margin-top:14px">Back to solo game</button></div></section>`;
+        $("createRoomBtn").addEventListener("click", () => {
+          onlineError = "";
+          const name = $("onlinePlayerName").value.trim() || "Player";
+          connectOnline({ type: "create_room", name });
+        });
+        $("joinRoomBtn").addEventListener("click", () => {
+          onlineError = "";
+          const name = $("onlinePlayerName").value.trim() || savedName || "Player";
+          const code = $("joinRoomCode").value.trim().toUpperCase();
+          if (code.length !== 5) { onlineError = "Enter the five-character room code."; renderOnlineLobby(); return; }
+          connectOnline({ type: "join_room", name, code });
+        });
+        $("backToSoloBtn").addEventListener("click", showSolo);
+      }
+      function onlineSeatMarkup(player, seat) {
+        const info = onlineState.players[seat];
+        return `<div class="online-seat ${onlineSeat === seat ? "current" : ""}"><strong>${info ? info.name : `Seat ${seat + 1}`}${seat === onlineState.hostSeat && info ? " ★" : ""}</strong><span>${info ? (info.online ? "Connected" : "Disconnected") : "Waiting for player"}${onlineSeat === seat ? " · You" : ""}</span></div>`;
+      }
+      function onlineCardMarkup(card, index, playable) {
+        const suit = suitInfo(card.suit);
+        return `<button class="playing-card${suit.red ? " red" : ""}${playable ? " playable" : " disabled"}" type="button" data-online-card="${index}" ${playable ? "" : "disabled"} aria-label="${playable ? "Play" : "Your card"} ${card.rank} ${suit.name}"><span class="corner"><span class="rank">${card.rank}</span><span class="suit">${suit.symbol}</span></span><span class="center-suit">${suit.symbol}</span></button>`;
+      }
+      function onlineCardFace(card) {
+        const suit = suitInfo(card.suit);
+        return `<div class="playing-card${suit.red ? " red" : ""}"><span class="corner"><span class="rank">${card.rank}</span><span class="suit">${suit.symbol}</span></span><span class="center-suit">${suit.symbol}</span></div>`;
+      }
+      function renderOnlineRoom() {
+        if (!onlineState) return renderOnlineLobby();
+        if (onlineTimerInterval) clearInterval(onlineTimerInterval);
+        const s = onlineState;
+        const names = s.players.map((player, seat) => player ? player.name : `Seat ${seat + 1}`);
+        const isHost = onlineSeat === s.hostSeat;
+        const isCaller = onlineSeat === s.caller;
+        const myTurn = onlineSeat === s.turn;
+        const seats = s.players.map((player, seat) => onlineSeatMarkup(player, seat)).join("");
+        let content = `<div class="online-seats">${seats}</div>`;
+        if (s.phase === "waiting") {
+          const occupied = s.players.filter(Boolean).length;
+          content += `<div class="online-box"><h3>Room code</h3><div class="room-code">${s.code}</div><button class="button" id="copyRoomBtn" type="button">Copy room code</button><p>Share this code with three friends. They must open the same hosted game page and choose Join room.</p><p>${occupied}/4 seats filled.</p>${isHost ? `<button class="button primary" id="onlineStartBtn" type="button" ${occupied < 4 || s.players.some(p => !p || !p.online) ? "disabled" : ""}>Start hand</button>` : `<p>Waiting for the room creator to start…</p>`}</div>`;
+        } else if (s.phase === "call") {
+          content += `<div class="online-box"><h3>Choose kaat</h3><p>${names[s.caller]} is the caller and leads the first baari.</p>${isCaller ? `<div class="field"><label for="onlineTrump">Kaat suit</label><select id="onlineTrump">${suits.map(suit => `<option value="${suit.key}">${suit.symbol} ${suit.name}</option>`).join("")}</select></div><button class="button primary" id="onlineCallBtn" type="button">Set kaat suit</button>` : `<p>Waiting for ${names[s.caller]} to choose the kaat suit…</p>`}</div>`;
+        } else if (s.phase === "bid") {
+          const submitted = s.bidSubmitted.filter(Boolean).length;
+          content += `<div class="online-box"><h3>Bid your ghar</h3><p>Kaat is ${suitInfo(s.trump).symbol} ${suitName(s.trump)}. Caller minimum: 6; everyone else: 2. All four bids must total at least 14.</p><p>${submitted}/4 players have locked their bid. Bids stay hidden until everyone has submitted.</p>${s.bidSubmitted[onlineSeat] ? `<div class="online-status">Your bid is locked. Waiting for the others…</div>` : `<div class="field"><label for="onlineBid">Your bid (minimum ${isCaller ? 6 : 2})</label><input id="onlineBid" type="number" min="${isCaller ? 6 : 2}" max="13" value="${isCaller ? 6 : 2}" step="1"></div><button class="button primary" id="onlineBidBtn" type="button">Lock my bid</button>`}</div>`;
+          if (s.hand && s.hand.length) content += `<div class="hand-area online-hand"><div class="hand-head"><h3>Your cards</h3><span>All four suits checked</span></div><div class="hand">${s.hand.map(card => onlineCardMarkup(card, -1, false)).join("")}</div></div>`;
+        } else {
+          const countdown = s.deadline ? Math.max(0, Math.ceil((s.deadline - Date.now()) / 1000)) : null;
+          const turnLabel = countdown === null ? "" : `<span class="timer-pill ${countdown <= 10 ? "urgent" : ""}">⏱ ${countdown}s</span>`;
+          if (s.phase === "play" || s.phase === "trickEnd") {
+            content += `<div class="online-box"><h3>${s.phase === "trickEnd" ? "Baari complete" : "Baari in play"}</h3><p>${s.message || ""}</p>${turnLabel}<div class="table-center online-trick"><div class="table-info">${s.trump ? `${suitInfo(s.trump).symbol} ${suitName(s.trump)} is kaat` : "Kaat not chosen"}<br>${s.turn !== null ? `${names[s.turn]}'s turn` : "Next baari starting…"}</div><div class="trick-cards">${[0,1,2,3].map(seat => { const play = s.trick.find(item => item.seat === seat); return play ? `<div class="played">${onlineCardFace(play.card)}<span>${names[seat]}</span></div>` : `<div class="played"><div class="playing-card back"></div><span>${names[seat]}</span></div>`; }).join("")}</div></div></div>`;
+            if (s.phase === "play" && s.hand) {
+              const leadSuit = s.trick.length ? s.trick[0].card.suit : null;
+              const mustFollow = leadSuit && s.hand.some(card => card.suit === leadSuit);
+              const playable = card => myTurn && (!mustFollow || card.suit === leadSuit);
+              content += `<div class="hand-area online-hand"><div class="hand-head"><h3>Your cards</h3><span>${myTurn ? (mustFollow ? `Follow suit: ${suitInfo(leadSuit).symbol} ${suitName(leadSuit)}` : "Your turn — choose a card") : `Waiting for ${names[s.turn]}`}</span></div><div class="hand">${s.hand.map((card, index) => onlineCardMarkup(card, index, playable(card))).join("")}</div></div>`;
+            }
+          } else if (s.phase === "summary" || s.phase === "gameover") {
+            const rows = names.map((name, seat) => `<tr><td>${name}${seat === s.caller ? " · caller" : ""}</td><td>${s.bids[seat]}</td><td>${s.tricks[seat]}</td><td>${s.tricks[seat] >= s.bids[seat] ? `+${s.bids[seat]}` : `−${s.bids[seat]}`}</td><td>${s.scores[seat]}</td></tr>`).join("");
+            content += `<div class="online-box"><h3>${s.phase === "gameover" ? `${names[s.matchWinner]} wins the match!` : `Hand ${s.handNo} complete`}</h3><p>${s.message}</p><table class="score-result"><thead><tr><th>Player</th><th>Bid</th><th>Ghar</th><th>Points</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>${isHost && s.phase === "summary" ? `<button class="button primary" id="onlineNextHandBtn" type="button">Deal next hand</button>` : ""}${isHost && s.phase === "gameover" ? `<button class="button primary" id="onlineRematchBtn" type="button">Start rematch</button>` : ""}</div>`;
+          }
+          if (s.phase === "play" && s.bids) content += `<div class="bids">${names.map((name, seat) => `<div class="bid-chip">${name}<strong>${s.bids[seat]} ghar</strong></div>`).join("")}</div>`;
+        }
+        $("onlineScreen").innerHTML = `<section class="panel">${header(`Room ${s.code}`, `Hand ${s.handNo || 0} · ${s.message || "Online match"}`, s.phase === "waiting" ? "Waiting room" : `Hand ${s.handNo}`)}
+          <div class="panel-body">${content}${onlineError ? `<div class="online-status ${/could not|not valid|not reach|connection/i.test(onlineError) ? "online-error" : ""}" role="status">${onlineError}</div>` : ""}
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="button" id="leaveOnlineBtn" type="button">Leave room</button><button class="button" id="backToSoloBtn" type="button">Back to solo game</button></div></div></section>`;
+        if ($("onlineStartBtn")) $("onlineStartBtn").addEventListener("click", () => sendOnline({ type: "start_hand" }));
+        if ($("copyRoomBtn")) $("copyRoomBtn").addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(s.code);
+            onlineError = "Room code copied. Send it to your friends.";
+          } catch {
+            onlineError = `Room code: ${s.code} — copy it from the display above.`;
+          }
+          renderOnlineRoom();
+        });
+        if ($("onlineCallBtn")) $("onlineCallBtn").addEventListener("click", () => sendOnline({ type: "call_trump", suit: $("onlineTrump").value }));
+        if ($("onlineBidBtn")) $("onlineBidBtn").addEventListener("click", () => sendOnline({ type: "submit_bid", bid: $("onlineBid").value }));
+        if ($("onlineNextHandBtn")) $("onlineNextHandBtn").addEventListener("click", () => sendOnline({ type: "new_hand" }));
+        if ($("onlineRematchBtn")) $("onlineRematchBtn").addEventListener("click", () => sendOnline({ type: "rematch" }));
+        if ($("leaveOnlineBtn")) $("leaveOnlineBtn").addEventListener("click", leaveOnlineRoom);
+        if ($("backToSoloBtn")) $("backToSoloBtn").addEventListener("click", showSolo);
+        $("onlineScreen").querySelectorAll("[data-online-card]").forEach(button => button.addEventListener("click", () => {
+          const card = onlineState.hand[Number(button.dataset.onlineCard)];
+          if (card) sendOnline({ type: "play_card", card });
+        }));
+        if (s.phase === "play" && s.deadline) onlineTimerInterval = setInterval(() => {
+          const timer = $("onlineScreen").querySelector(".timer-pill");
+          if (!timer || !onlineState || !onlineState.deadline) return;
+          const left = Math.max(0, Math.ceil((onlineState.deadline - Date.now()) / 1000));
+          timer.textContent = `⏱ ${left}s`;
+          timer.classList.toggle("urgent", left <= 10);
+        }, 250);
+      }
+      function leaveOnlineRoom() {
+        onlineIntent = false;
+        if (onlineTimerInterval) clearInterval(onlineTimerInterval);
+        if (onlineSocket && onlineSocket.readyState === WebSocket.OPEN) sendOnline({ type: "leave_room" });
+        onlineState = null;
+        onlineRoomCode = "";
+        onlineToken = "";
+        onlineSeat = null;
+        onlineError = "You left the room.";
+        renderOnlineLobby();
+      }
+      function render() {
+        scoreMarkup();
+        if (!state || state.phase === "lobby") renderLobby();
+        else if (state.phase === "call") renderCall();
+        else if (state.phase === "bid") renderBid();
+        else if (state.phase === "play") renderPlay();
+        else if (state.phase === "trickEnd") renderTrickEnd();
+        else if (state.phase === "summary") renderSummary();
+        else if (state.phase === "gameover") renderGameOver();
+      }
+
+      $("newGameBtn").addEventListener("click", startFreshMatch);
+      $("playOnlineBtn").addEventListener("click", showOnline);
+      $("rulesBtn").addEventListener("click", () => {
+        const details = document.querySelector("details");
+        details.open = !details.open;
+        details.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+      newMatch();
+    })();
+  </script>
+</body>
+</html>
