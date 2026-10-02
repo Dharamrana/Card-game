@@ -4,13 +4,7 @@ A 4-player trick-taking card game. Play **solo** against three computer opponent
 
 ## Screenshots
 
-| Lobby | Choose Kaat | Bidding |
-|---|---|---|
-| ![Game lobby](docs/screenshots/lobby.png) | ![Choose the kaat suit](docs/screenshots/call.png) | ![Bidding ghar](docs/screenshots/bid.png) |
-
-| Gameplay | Online room |
-|---|---|
-| ![Mid-hand gameplay](docs/screenshots/play.png) | ![Online room with table chat](docs/screenshots/online.png) |
+> Screenshots coming soon.
 
 ## Features
 
