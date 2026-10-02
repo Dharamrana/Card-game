@@ -180,6 +180,33 @@
       .bid-total { padding:0; }
       .bids { grid-template-columns:repeat(2,1fr); }
     }
+    .kick-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid #e8e4da; font-weight:700; }
+    .kick-row:first-of-type { border-top:none; }
+    .chat-panel { margin-top:14px; border:1px solid #e4e9e2; border-radius:14px; background:#f7faf6; overflow:hidden; }
+    .chat-toggle { width:100%; display:flex; align-items:center; gap:8px; padding:11px 14px; background:none; border:none; font-weight:800; font-size:14px; color:#182520; cursor:pointer; }
+    .chat-badge { min-width:20px; height:20px; padding:0 6px; border-radius:99px; background:#c63e43; color:#fff; font-size:11px; font-weight:800; display:inline-grid; place-items:center; }
+    .chat-chevron { margin-left:auto; color:#6c7a72; }
+    .chat-body { border-top:1px solid #e8e4da; }
+    .chat-messages { max-height:190px; overflow-y:auto; padding:10px 14px; display:flex; flex-direction:column; gap:7px; }
+    .chat-msg { max-width:88%; padding:7px 11px; border-radius:12px; background:#fff; border:1px solid #e8e4da; font-size:13px; align-self:flex-start; }
+    .chat-msg.me { align-self:flex-end; background:#e6f3ea; border-color:#cfe6d4; }
+    .chat-name { display:block; font-size:10px; font-weight:800; color:#6c7a72; margin-bottom:2px; }
+    .chat-msg.me .chat-name { color:#2c6e4f; }
+    .chat-text { color:#182520; word-break:break-word; }
+    .chat-empty { color:#8a958e; font-size:12px; text-align:center; padding:10px; }
+    .chat-input-row { display:flex; gap:8px; padding:10px 12px; border-top:1px solid #e8e4da; background:#fff; }
+    .chat-input-row input { flex:1; min-width:0; border:1px solid #dfe3dc; border-radius:10px; padding:9px 12px; font:inherit; font-size:14px; }
+    @keyframes cardIn { from { opacity:0; transform:translateY(14px) scale(.96); } to { opacity:1; transform:none; } }
+    .trick-cards .played .playing-card { animation:cardIn .22s ease; }
+    .hand .playing-card { animation:cardIn .28s backwards; }
+    .hand .playing-card.selected { transform:translateY(-14px); border-color:var(--gold); box-shadow:0 12px 22px #132f2433, 0 0 0 2px var(--gold); opacity:1; }
+    .hand .playing-card.playable:hover { transform:translateY(-7px); }
+    .hand .playing-card.selected:hover { transform:translateY(-14px); }
+    .last-trick { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:12px; padding:9px 12px; border:1px dashed #d8d2c4; border-radius:12px; background:#fffdf6; font-size:12px; color:#6c7a72; }
+    .mini-card { display:inline-block; padding:2px 7px; border:1px solid #dedbd4; border-radius:7px; background:#fff; font-weight:800; color:#202923; }
+    .mini-card.red { color:var(--red); }
+    @keyframes winPulse { 0% { box-shadow:0 0 0 0 #f1c56b77; } 100% { box-shadow:0 0 0 16px #f1c56b00; } }
+    .seat.active { animation:winPulse 1.2s ease-out infinite; border-radius:14px; }
   </style>
 </head>
 <body>
@@ -190,6 +217,7 @@
         <div><h1>Kaat</h1><p>Four-player card table</p></div>
       </div>
       <div class="top-actions">
+        <button class="button small" id="muteBtn" type="button" aria-label="Toggle sound">🔊</button>
         <button class="button small" id="rulesBtn" type="button">Rules</button>
         <button class="button small" id="playOnlineBtn" type="button">Play online</button>
         <button class="button small" id="newGameBtn" type="button">New game</button>
@@ -198,7 +226,7 @@
     <section id="scorebar" class="scorebar" aria-label="Match scores"></section>
     <section id="screen"></section>
     <section id="onlineScreen" hidden></section>
-    <details>
+    <details id="rulesDetails">
       <summary>Quick rules</summary>
       <div class="details-body">
         <span>Each player gets 13 cards. Every hand is redealt until all four players hold at least one card of every suit.</span>
@@ -239,11 +267,60 @@
       let onlineIntent = false;
       let onlineTimerInterval = null;
       let queuedOnlineAction = null;
+      let onlinePlayLock = false;
+      let onlineChat = [];
+      let onlineChatOpen = true;
+      let onlineChatUnread = 0;
+      let onlineChatDraft = "";
+      let selectedCard = null;
+      let trickTimer = null;
+      let audioCtx = null;
+      let onlineRetries = 0;
+      let difficulty = readStorage(localStorage, "kaat.difficulty") || "normal";
+      if (!["easy", "normal", "hard"].includes(difficulty)) difficulty = "normal";
+      let sfxOn = readStorage(localStorage, "kaat.muted") !== "1";
 
       function cardText(card) { return `${card.rank}${suits.find(s => s.key === card.suit).symbol}`; }
       function readStorage(storage, key) { try { return storage.getItem(key) || ""; } catch { return ""; } }
       function writeStorage(storage, key, value) { try { storage.setItem(key, value); } catch {} }
       function clearStorage(storage, key) { try { storage.removeItem(key); } catch {} }
+      function tone(freq, dur, delay = 0, type = "sine", vol = 0.1) {
+        if (!sfxOn) return;
+        try {
+          audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          const t = audioCtx.currentTime + delay;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = type;
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(vol, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(t); osc.stop(t + dur + 0.03);
+        } catch {}
+      }
+      function sfx(name) {
+        if (!sfxOn) return;
+        if (name === "play") tone(520, 0.07);
+        else if (name === "select") tone(720, 0.05, 0, "sine", 0.06);
+        else if (name === "trick") { tone(440, 0.08); tone(660, 0.1, 0.08); }
+        else if (name === "bid") tone(600, 0.06);
+        else if (name === "deal") [392, 523, 659].forEach((f, i) => tone(f, 0.07, i * 0.06, "sine", 0.07));
+        else if (name === "win") [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.13, i * 0.1));
+        else if (name === "lose") { tone(300, 0.16); tone(210, 0.22, 0.13); }
+      }
+      function getStats() {
+        try { return Object.assign({ matches: 0, wins: 0, hands: 0, bidsMade: 0, bidsTotal: 0 }, JSON.parse(localStorage.getItem("kaat.stats") || "{}")); }
+        catch { return { matches: 0, wins: 0, hands: 0, bidsMade: 0, bidsTotal: 0 }; }
+      }
+      function saveStats(stats) { writeStorage(localStorage, "kaat.stats", JSON.stringify(stats)); }
+      function statsLine() {
+        const s = getStats();
+        if (!s.hands) return "No hands played yet — your stats will appear here.";
+        const pct = s.bidsTotal ? Math.round(100 * s.bidsMade / s.bidsTotal) : 0;
+        return `${s.hands} hands · ${s.matches} matches (${s.wins} won) · bids made ${pct}%`;
+      }
       function suitInfo(key) { return suits.find(s => s.key === key); }
       function suitName(key) { return suitInfo(key).name; }
       function isRed(card) { return suitInfo(card.suit).red; }
@@ -273,6 +350,8 @@
       }
       function newMatch() {
         clearTimeout(aiTimer);
+        clearTimeout(trickTimer);
+        selectedCard = null;
         state = { scores: [0, 0, 0, 0], handNo: 0, caller: 0, phase: "lobby" };
         render();
       }
@@ -283,6 +362,8 @@
       }
       function nextHand(caller) {
         clearTimeout(aiTimer);
+        clearTimeout(trickTimer);
+        selectedCard = null;
         const scores = state.scores.slice();
         const handNo = state.handNo + 1;
         state = {
@@ -296,6 +377,7 @@
           state.bids = chooseBids();
           state.phase = "bid";
         }
+        sfx("deal");
         render();
       }
       function suitStrength(hand, suit) {
@@ -386,21 +468,49 @@
       function chooseBotCard(player) {
         const options = legalCards(player);
         const current = currentWinningPlay(state.trick);
-        const needs = state.tricks[player] < state.bids[player];
-        const winning = options.filter(option => beats({ card: option.card }, current));
-        if (needs && winning.length) {
-          return winning.sort((a, b) => rankValue[a.card.rank] - rankValue[b.card.rank])[0];
+        const leading = !state.trick.length;
+        const need = state.tricks[player] < state.bids[player];
+        const made = state.tricks[player] >= state.bids[player];
+        const byRankAsc = (a, b) => rankValue[a.card.rank] - rankValue[b.card.rank];
+        const shedFirst = (a, b) => (Number(a.card.suit === state.trump) - Number(b.card.suit === state.trump)) || byRankAsc(a, b);
+        const winners = options.filter(option => beats({ card: option.card }, current)).sort(byRankAsc);
+        const losers = options.filter(option => !beats({ card: option.card }, current)).sort(shedFirst);
+        if (difficulty === "easy") {
+          if (need && winners.length) return winners[0];
+          const pool = losers.length ? losers : options;
+          return pool.slice().sort(byRankAsc)[0];
         }
-        const nonWinning = options.filter(option => !beats({ card: option.card }, current));
-        const pool = nonWinning.length ? nonWinning : options;
-        return pool.slice().sort((a, b) => rankValue[a.card.rank] - rankValue[b.card.rank])[0];
+        // normal & hard: protect the bid, duck once it's made, manage trumps
+        if (made && !leading) {
+          const pool = losers.length ? losers : options;
+          return pool[0];
+        }
+        if (leading) {
+          if (difficulty === "hard" && need) {
+            // cash winners: highest card of the longest non-trump suit
+            const nonTrump = options.filter(o => o.card.suit !== state.trump);
+            if (nonTrump.length) {
+              const bySuit = {};
+              nonTrump.forEach(o => { (bySuit[o.card.suit] = bySuit[o.card.suit] || []).push(o); });
+              const longest = Object.values(bySuit).sort((a, b) => b.length - a.length)[0];
+              return longest.slice().sort((a, b) => rankValue[b.card.rank] - rankValue[a.card.rank])[0];
+            }
+            return options.slice().sort((a, b) => rankValue[b.card.rank] - rankValue[a.card.rank])[0];
+          }
+          return options.slice().sort(shedFirst)[0];
+        }
+        if (need && winners.length) return winners[0]; // cheapest winner, never overpay
+        const pool = losers.length ? losers : options;
+        return pool[0];
       }
       function playCard(player, index) {
         if (state.phase !== "play" || player !== state.turn) return;
         const legal = legalCards(player);
         if (!legal.some(option => option.index === index)) return;
+        selectedCard = null;
         const [card] = state.hands[player].splice(index, 1);
         state.trick.push({ player, card });
+        sfx("play");
         state.message = `${seatNames[player]} played ${cardText(card)}.`;
         if (state.trick.length === 4) {
           const winner = winningPlay(state.trick).player;
@@ -409,6 +519,7 @@
           state.lastWinner = winner;
           state.phase = "trickEnd";
           state.message = `${seatNames[winner]} won the ghar and will lead the next baari.`;
+          sfx("trick");
           render();
           return;
         }
@@ -426,6 +537,7 @@
         }, 560);
       }
       function continueAfterTrick() {
+        if (!state || state.phase !== "trickEnd") return;
         if (state.hands.every(hand => hand.length === 0)) {
           finishHand();
           return;
@@ -441,10 +553,23 @@
       function finishHand() {
         const deltas = state.bids.map((bid, p) => state.tricks[p] >= bid ? bid : -bid);
         state.scores = state.scores.map((score, p) => score + deltas[p]);
-        const winners = state.scores.map((score, p) => score >= 21 ? p : -1).filter(p => p >= 0);
-        state.matchWinner = winners.length ? winners[0] : null;
+        const stats = getStats();
+        stats.hands += 1;
+        stats.bidsTotal += 1;
+        if (state.tricks[0] >= state.bids[0]) stats.bidsMade += 1;
+        let winner = -1, best = -Infinity;
+        state.scores.forEach((score, p) => { if (score >= 21 && score > best) { best = score; winner = p; } });
+        state.matchWinner = winner >= 0 ? winner : null;
         state.phase = state.matchWinner === null ? "summary" : "gameover";
-        state.message = state.matchWinner === null ? "Hand complete. Scores have been added." : `${seatNames[state.matchWinner]} reached +21 and won the match!`;
+        if (state.matchWinner === null) {
+          state.message = "Hand complete. Scores have been added.";
+        } else {
+          stats.matches += 1;
+          if (state.matchWinner === 0) { stats.wins += 1; sfx("win"); }
+          else sfx("lose");
+          state.message = `${seatNames[state.matchWinner]} reached +21 and won the match!`;
+        }
+        saveStats(stats);
         render();
       }
       function cardMarkup(card, extra = "") {
@@ -468,7 +593,9 @@
           <div class="panel-body"><div class="lobby-grid">
             <div class="lobby-card"><h3>Choose the kaat caller</h3><p>The caller chooses a suit, bids at least 6 ghar, and leads the first card. You can let a bot call this hand too.</p>
               <div class="field"><label for="callerSelect">Caller for hand ${state.handNo + 1}</label><select id="callerSelect">${seatNames.map((n,p)=>`<option value="${p}" ${p === state.caller ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+              <div class="field"><label for="diffSelect">Bot difficulty</label><select id="diffSelect">${["easy","normal","hard"].map(d=>`<option value="${d}" ${d === difficulty ? "selected" : ""}>${d[0].toUpperCase()+d.slice(1)}${d==="easy"?" — relaxed":d==="hard"?" — ruthless":" — balanced"}</option>`).join("")}</select></div>
               <button class="button primary" id="dealBtn" type="button">Deal cards</button>
+              <div class="note" style="margin-top:10px">📊 ${statsLine()}</div>
             </div>
             <div class="lobby-card"><h3>Quick setup</h3><div class="rules">
               <div class="rule-line"><span class="rule-icon">52</span><span>52 cards, 4 players, 13 cards each.</span></div>
@@ -478,6 +605,10 @@
             </div><div class="note">This game follows the rulebook. The caller for each hand is selected here because the rulebook does not specify a caller rotation.</div></div>
           </div></div></section>`;
         $("dealBtn").addEventListener("click", () => nextHand(Number($("callerSelect").value)));
+        $("diffSelect").addEventListener("change", () => {
+          difficulty = $("diffSelect").value;
+          writeStorage(localStorage, "kaat.difficulty", difficulty);
+        });
       }
       function renderCall() {
         const callerName = seatNames[state.caller];
@@ -497,15 +628,13 @@
       function renderBid() {
         const trump = suitInfo(state.trump);
         const minimum = state.caller === 0 ? 6 : 2;
-        const botBids = state.bids.map((bid, p) => p === 0 ? null : bid);
-        const guessedTotal = botBids.reduce((sum, n) => sum + (n || 0), 0);
         screen.innerHTML = `<section class="panel">${header("Call your ghar", `${seatNames[state.caller]} called ${trump.symbol} ${trump.name} as kaat. ${seatNames[state.caller]} leads the first baari.`, `Hand ${state.handNo}`)}
           <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>${renderTable()}
           <div class="hand-area"><div class="hand-head"><h3>Your cards</h3><span>Your minimum bid is ${minimum}</span></div><div class="hand">${renderHandCards(false)}</div>
-            <div class="bid-panel" style="margin-top:14px"><div class="field"><label for="bidInput">Your ghar bid</label><input id="bidInput" type="number" min="${minimum}" max="13" value="${minimum}" step="1"><span class="muted">Enter ${minimum} to 13. A caller must bid at least 6.</span></div><div><div class="bid-total">Bots have called <strong>${guessedTotal}</strong> so far. Table minimum: <strong>14</strong>.</div><button class="button primary" id="lockBidBtn" type="button">Lock bids and start</button></div></div>
-            <div class="bids">${seatNames.map((n,p)=>`<div class="bid-chip">${n}${p===state.caller?" · caller":""}<strong>${p===0?"Your bid":state.bids[p]+" ghar"}</strong></div>`).join("")}</div>
+            <div class="bid-panel" style="margin-top:14px"><div class="field"><label for="bidInput">Your ghar bid</label><input id="bidInput" type="number" min="${minimum}" max="13" value="${minimum}" step="1"><span class="muted">Enter ${minimum} to 13. A caller must bid at least 6.</span></div><div><div class="bid-total">Bots have locked their bids — hidden until you lock yours. Table minimum: <strong>14</strong>.</div><button class="button primary" id="lockBidBtn" type="button">Lock bids and start</button></div></div>
+            <div class="bids">${seatNames.map((n,p)=>`<div class="bid-chip">${n}${p===state.caller?" · caller":""}<strong>${p===0?"Your bid":"Hidden"}</strong></div>`).join("")}</div>
           </div></div></section>`;
-        $("lockBidBtn").addEventListener("click", lockBid);
+        $("lockBidBtn").addEventListener("click", () => { sfx("bid"); lockBid(); });
       }
       function renderTable() {
         const plays = state.trick || [];
@@ -525,27 +654,36 @@
         const allowed = allowPlay ? new Set(legalCards(0).map(x=>x.index)) : new Set();
         return state.hands[0].map((card,index) => {
           const can = allowPlay && state.turn === 0 && allowed.has(index);
-          const cls = `${isRed(card)?" red":""}${can?" playable":" disabled"}`;
-          return `<button class="playing-card${cls}" data-card-index="${index}" type="button" ${can?"":"disabled"} aria-label="Play ${cardText(card)}"><span class="corner"><span class="rank">${card.rank}</span><span class="suit">${suitInfo(card.suit).symbol}</span></span><span class="center-suit">${suitInfo(card.suit).symbol}</span></button>`;
+          const sel = can && selectedCard === index;
+          const cls = `${isRed(card)?" red":""}${can?" playable":" disabled"}${sel?" selected":""}`;
+          return `<button class="playing-card${cls}" data-card-index="${index}" type="button" ${can?"":"disabled"} style="animation-delay:${Math.min(index * 22, 280)}ms" aria-label="${sel ? "Play" : "Select"} ${cardText(card)}"><span class="corner"><span class="rank">${card.rank}</span><span class="suit">${suitInfo(card.suit).symbol}</span></span><span class="center-suit">${suitInfo(card.suit).symbol}</span></button>`;
         }).join("");
       }
       function renderPlay() {
         const caller = seatNames[state.caller];
         const lead = state.trick.length ? suitInfo(state.trick[0].card.suit) : null;
         const hint = state.turn === 0
-          ? (lead && state.hands[0].some(c=>c.suit===lead.key) ? `Follow suit: play ${lead.symbol} ${lead.name}.` : lead ? `You have no ${lead.name}; play kaat or any card.` : "Choose any card to lead this baari.")
+          ? (selectedCard !== null ? "Tap the highlighted card again to play it."
+            : lead && state.hands[0].some(c=>c.suit===lead.key) ? `Follow suit: tap a ${lead.symbol} ${lead.name} card, then tap again to play.` : lead ? `You have no ${lead.name}; tap any card twice to play it.` : "Tap a card to select it, tap again to lead this baari.")
           : `${seatNames[state.turn]} is deciding a card…`;
+        const lastStrip = state.lastTrick ? `<div class="last-trick"><span>Last baari:</span> ${state.lastTrick.map(p => `<span class="mini-card${isRed(p.card) ? " red" : ""}">${p.card.rank}${suitInfo(p.card.suit).symbol}</span>`).join("")} <span>→ ${seatNames[state.lastWinner]} won</span></div>` : "";
         screen.innerHTML = `<section class="panel">${header("Baari in play", `${caller} called kaat. Winner of each baari takes one ghar and leads next.`, `Hand ${state.handNo} · ${13-state.hands[0].length}/13 played`)}
-          <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>${renderTable()}
+          <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>${renderTable()}${lastStrip}
           <div class="hand-area"><div class="hand-head"><h3>Your cards</h3><span class="turn-tag">${hint}</span></div><div class="hand">${renderHandCards(true)}</div></div>
           <div class="live" aria-live="polite">Kaat suit: <strong>${suitInfo(state.trump).symbol} ${suitName(state.trump)}</strong> · Lead suit: <strong>${lead ? `${lead.symbol} ${lead.name}` : "not led"}</strong></div></div></section>`;
-        screen.querySelectorAll("[data-card-index]").forEach(button => button.addEventListener("click", () => playCard(0, Number(button.dataset.cardIndex))));
+        screen.querySelectorAll("[data-card-index]").forEach(button => button.addEventListener("click", () => {
+          const index = Number(button.dataset.cardIndex);
+          if (selectedCard === index) playCard(0, index);
+          else { selectedCard = index; sfx("select"); render(); }
+        }));
       }
       function renderTrickEnd() {
         screen.innerHTML = `<section class="panel">${header("Baari complete", `${seatNames[state.lastWinner]} took this ghar and leads the next baari.`, `Hand ${state.handNo} · ${state.tricks.reduce((a,b)=>a+b,0)}/13 ghar`)}
           <div class="panel-body"><div class="stage-message"><span class="dot"></span>${state.message}</div>${renderTable()}
-          <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="button primary" id="continueBtn" type="button">Next baari</button></div></div></section>`;
-        $("continueBtn").addEventListener("click", continueAfterTrick);
+          <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="button primary" id="continueBtn" type="button">Next baari →</button></div></div></section>`;
+        clearTimeout(trickTimer);
+        trickTimer = setTimeout(() => { if (state && state.phase === "trickEnd") continueAfterTrick(); }, 1700);
+        $("continueBtn").addEventListener("click", () => { clearTimeout(trickTimer); continueAfterTrick(); });
       }
       function renderSummary() {
         const rows = seatNames.map((name,p)=>{
@@ -566,9 +704,9 @@
         });
       }
       function renderGameOver() {
-        const rows = seatNames.map((name,p)=>`<tr><td>${name}</td><td>${state.scores[p]}</td></tr>`).join("");
         screen.innerHTML = `<section class="panel">${header(`${seatNames[state.matchWinner]} wins!`, "A player reached +21 match points.", `Hand ${state.handNo}`)}
           <div class="panel-body"><div class="summary-grid">${seatNames.map((name,p)=>`<div class="summary-card"><strong>${name}</strong><span class="big">${state.scores[p]}</span><small>match points</small></div>`).join("")}</div>
+          <div class="note" style="margin-bottom:14px">📊 ${statsLine()}</div>
           <button class="button primary" id="playAgainBtn" type="button">Play another match</button></div></section>`;
         $("playAgainBtn").addEventListener("click", startFreshMatch);
       }
@@ -577,7 +715,7 @@
         scorebar.hidden = true;
         scorebar.style.display = "none";
         screen.hidden = true;
-        document.querySelector("details").hidden = true;
+        $("rulesDetails").hidden = true;
         document.querySelector(".footer").hidden = true;
         $("onlineScreen").hidden = false;
         if (onlineState) renderOnlineRoom();
@@ -595,15 +733,25 @@
         scorebar.hidden = false;
         scorebar.style.display = "grid";
         screen.hidden = false;
-        document.querySelector("details").hidden = false;
+        $("rulesDetails").hidden = false;
         document.querySelector(".footer").hidden = false;
       }
       function onlineWsAddress() {
         const field = $("onlineServerAddress");
-        if (field && field.value.trim()) return field.value.trim().replace(/\/$/, "");
+        if (field && field.value.trim()) {
+          const raw = field.value.trim().replace(/\/$/, "");
+          return /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : "wss://" + raw;
+        }
         if (location.protocol === "https:") return `wss://${location.host}`;
         if (location.protocol === "http:") return `ws://${location.host}`;
         return "ws://localhost:8080";
+      }
+      // The deadline is stamped with the server clock; correct for skew so the
+      // countdown is right even when the player's device clock disagrees.
+      function onlineMsLeft(s) {
+        if (!s || !s.deadline) return null;
+        const skew = (s.serverTime || s.receivedAt || Date.now()) - (s.receivedAt || Date.now());
+        return Math.max(0, s.deadline - (Date.now() + skew));
       }
       function sendOnline(data) {
         if (onlineSocket && onlineSocket.readyState === WebSocket.OPEN) {
@@ -620,6 +768,7 @@
         writeStorage(localStorage, "kaat.playerName", playerName);
         onlineError = "Connecting to the game server…";
         onlineIntent = true;
+        onlineRetries = 0;
         queuedOnlineAction = action;
         if (onlineSocket && onlineSocket.readyState === WebSocket.OPEN) {
           if (action.type === "join_room" && onlineToken && action.code === onlineRoomCode) action.token = onlineToken;
@@ -636,6 +785,7 @@
           return;
         }
         onlineSocket.addEventListener("open", () => {
+          onlineRetries = 0;
           const outgoing = queuedOnlineAction;
           queuedOnlineAction = null;
           if (outgoing && outgoing.type === "join_room" && onlineToken && outgoing.code === onlineRoomCode) outgoing.token = onlineToken;
@@ -654,11 +804,24 @@
             writeStorage(sessionStorage, "kaat.playerToken", onlineToken);
             writeStorage(sessionStorage, "kaat.playerName", playerName);
             onlineError = "";
+            onlineChat = [];
+            onlineChatUnread = 0;
+            onlineChatDraft = "";
+            onlinePlayLock = false;
           } else if (payload.type === "room_state") {
+            payload.state.receivedAt = Date.now();
             onlineState = payload.state;
             onlineRoomCode = payload.state.code;
             onlineError = "";
+            onlinePlayLock = false;
+            onlineChat = payload.state.chat || [];
             if (onlineMode) renderOnlineRoom();
+          } else if (payload.type === "chat") {
+            onlineChat.push(payload.message);
+            if (onlineChat.length > 50) onlineChat.shift();
+            renderChatMessages();
+            if (!onlineChatOpen) { onlineChatUnread += 1; paintChatBadge(); }
+            else sfx("select");
           } else if (payload.type === "error") {
             onlineError = payload.message;
             if (onlineMode) renderOnlineRoom();
@@ -669,15 +832,21 @@
             onlineState = null;
             onlineRoomCode = "";
             onlineToken = "";
+            onlineChat = [];
+            onlineChatUnread = 0;
+            onlineChatDraft = "";
             clearStorage(sessionStorage, "kaat.roomCode");
             clearStorage(sessionStorage, "kaat.playerToken");
-            onlineError = payload.bySeat === onlineSeat ? "You closed the room." : "The room creator closed this room.";
+            onlineError = payload.bySeat === onlineSeat ? "You closed the room." : "The room was closed.";
             if (onlineMode) renderOnlineLobby();
           } else if (payload.type === "left_room") {
             onlineState = null;
             onlineRoomCode = "";
             onlineToken = "";
             onlineSeat = null;
+            onlineChat = [];
+            onlineChatUnread = 0;
+            onlineChatDraft = "";
             clearStorage(sessionStorage, "kaat.roomCode");
             clearStorage(sessionStorage, "kaat.playerToken");
             onlineError = "You left the room.";
@@ -686,6 +855,12 @@
         });
         onlineSocket.addEventListener("close", () => {
           if (!onlineIntent) return;
+          if (onlineRetries >= 5) {
+            onlineError = "Server unreachable. Check the address, then create or join a room to try again.";
+            if (onlineMode) renderOnlineLobby();
+            return;
+          }
+          onlineRetries += 1;
           onlineError = "Connection lost. Reconnecting…";
           if (onlineMode) renderOnlineLobby();
           if (onlineRoomCode && onlineToken) {
@@ -709,7 +884,8 @@
           <div class="panel-body"><div class="online-lobby-grid">
             <div class="online-box"><h3>Create a room</h3><p>You’ll be the room creator. Share the five-character code with three friends.</p>
               <div class="field"><label for="onlinePlayerName">Your display name</label><input id="onlinePlayerName" maxlength="18" value="${savedName.replace(/[&<>\"]/g, "")}" placeholder="e.g. Dharam"></div>
-              ${location.protocol === "file:" ? `<div class="field"><label for="onlineServerAddress">Game server address</label><input id="onlineServerAddress" value="ws://localhost:8080" placeholder="wss://your-game-host"></div><p>For online friends, enter the public server address after deployment.</p>` : ""}
+              <div class="field"><label for="onlineServerAddress">Game server address <span class="muted">(optional)</span></label><input id="onlineServerAddress" value="${location.protocol === "file:" ? "ws://localhost:8080" : ""}" placeholder="Auto: this page's own server"></div>
+              <p class="muted">Playing with friends across the internet? Deploy the game server, then paste its address here (it starts with wss://).</p>
               <button class="button primary" id="createRoomBtn" type="button">Create room</button>
             </div>
             <div class="online-box"><h3>Join a room</h3><p>Enter the room code your friend shared with you.</p>
@@ -732,9 +908,11 @@
         });
         $("backToSoloBtn").addEventListener("click", showSolo);
       }
+      function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
       function onlineSeatMarkup(player, seat) {
         const info = onlineState.players[seat];
-        return `<div class="online-seat ${onlineSeat === seat ? "current" : ""}"><strong>${info ? info.name : `Seat ${seat + 1}`}${seat === onlineState.hostSeat && info ? " ★" : ""}</strong><span>${info ? (info.online ? "Connected" : "Disconnected") : "Waiting for player"}${onlineSeat === seat ? " · You" : ""}</span></div>`;
+        const cards = onlineState.handCounts ? ` · ${onlineState.handCounts[seat]} cards` : "";
+        return `<div class="online-seat ${onlineSeat === seat ? "current" : ""}"><strong>${info ? info.name : `Seat ${seat + 1}`}${seat === onlineState.hostSeat && info ? " ★" : ""}</strong><span>${info ? (info.online ? "Connected" : "Disconnected") : "Waiting for player"}${cards}${onlineSeat === seat ? " · You" : ""}</span></div>`;
       }
       function onlineCardMarkup(card, index, playable) {
         const suit = suitInfo(card.suit);
@@ -743,6 +921,50 @@
       function onlineCardFace(card) {
         const suit = suitInfo(card.suit);
         return `<div class="playing-card${suit.red ? " red" : ""}"><span class="corner"><span class="rank">${card.rank}</span><span class="suit">${suit.symbol}</span></span><span class="center-suit">${suit.symbol}</span></div>`;
+      }
+      function renderChatMessages() {
+        const box = $("chatMessages");
+        if (!box) return;
+        box.innerHTML = onlineChat.length
+          ? onlineChat.map(m => `<div class="chat-msg${m.seat === onlineSeat ? " me" : ""}"><span class="chat-name">${escapeHtml(m.name)}</span><span class="chat-text">${escapeHtml(m.text)}</span></div>`).join("")
+          : `<div class="chat-empty">No messages yet. Say hi! 👋</div>`;
+        box.scrollTop = box.scrollHeight;
+      }
+      function paintChatBadge() {
+        const badge = document.querySelector(".chat-badge");
+        if (!badge) return;
+        badge.hidden = onlineChatUnread === 0;
+        badge.textContent = onlineChatUnread > 9 ? "9+" : String(onlineChatUnread);
+      }
+      function sendChatMessage() {
+        const input = $("chatInput");
+        if (!input) return;
+        const text = input.value.trim().slice(0, 200);
+        if (!text) return;
+        if (sendOnline({ type: "chat", text })) { input.value = ""; onlineChatDraft = ""; }
+      }
+      function wireChatPanel() {
+        const toggle = $("chatToggle"), body = $("chatBody"), input = $("chatInput"), sendBtn = $("chatSend");
+        if (!toggle || !body || !input || !sendBtn) return;
+        body.hidden = !onlineChatOpen;
+        toggle.querySelector(".chat-chevron").textContent = onlineChatOpen ? "▾" : "▸";
+        renderChatMessages();
+        paintChatBadge();
+        input.value = onlineChatDraft;
+        toggle.onclick = () => {
+          onlineChatOpen = !onlineChatOpen;
+          body.hidden = !onlineChatOpen;
+          toggle.querySelector(".chat-chevron").textContent = onlineChatOpen ? "▾" : "▸";
+          if (onlineChatOpen) {
+            onlineChatUnread = 0;
+            paintChatBadge();
+            renderChatMessages();
+            input.focus();
+          }
+        };
+        input.oninput = () => { onlineChatDraft = input.value; };
+        input.onkeydown = (e) => { if (e.key === "Enter") sendChatMessage(); };
+        sendBtn.onclick = sendChatMessage;
       }
       function renderOnlineRoom() {
         if (!onlineState) return renderOnlineLobby();
@@ -757,17 +979,22 @@
         if (s.phase === "waiting") {
           const occupied = s.players.filter(Boolean).length;
           content += `<div class="online-box"><h3>Room code</h3><div class="room-code">${s.code}</div><button class="button" id="copyRoomBtn" type="button">Copy room code</button><p>Share this code with three friends. They must open the same hosted game page and choose Join room.</p><p>${occupied}/4 seats filled.</p>${isHost ? `<button class="button primary" id="onlineStartBtn" type="button" ${occupied < 4 || s.players.some(p => !p || !p.online) ? "disabled" : ""}>Start hand</button>` : `<p>Waiting for the room creator to start…</p>`}</div>`;
+          const ghosts = s.players.map((player, i) => ({ player, i })).filter(x => x.player && !x.player.online && x.i !== onlineSeat);
+          if (isHost && ghosts.length) content += `<div class="online-box"><h3>Disconnected</h3>${ghosts.map(g => `<div class="kick-row"><span>${g.player.name}</span><button class="button small" type="button" data-kick="${g.i}">Remove</button></div>`).join("")}<p class="muted">Removing frees the seat so someone new can join.</p></div>`;
         } else if (s.phase === "call") {
           content += `<div class="online-box"><h3>Choose kaat</h3><p>${names[s.caller]} is the caller and leads the first baari.</p>${isCaller ? `<div class="field"><label for="onlineTrump">Kaat suit</label><select id="onlineTrump">${suits.map(suit => `<option value="${suit.key}">${suit.symbol} ${suit.name}</option>`).join("")}</select></div><button class="button primary" id="onlineCallBtn" type="button">Set kaat suit</button>` : `<p>Waiting for ${names[s.caller]} to choose the kaat suit…</p>`}</div>`;
+          if (s.hand && s.hand.length) content += `<div class="hand-area online-hand"><div class="hand-head"><h3>Your cards</h3><span>Pick your kaat suit from these</span></div><div class="hand">${s.hand.map(card => onlineCardMarkup(card, -1, false)).join("")}</div></div>`;
         } else if (s.phase === "bid") {
           const submitted = s.bidSubmitted.filter(Boolean).length;
           content += `<div class="online-box"><h3>Bid your ghar</h3><p>Kaat is ${suitInfo(s.trump).symbol} ${suitName(s.trump)}. Caller minimum: 6; everyone else: 2. All four bids must total at least 14.</p><p>${submitted}/4 players have locked their bid. Bids stay hidden until everyone has submitted.</p>${s.bidSubmitted[onlineSeat] ? `<div class="online-status">Your bid is locked. Waiting for the others…</div>` : `<div class="field"><label for="onlineBid">Your bid (minimum ${isCaller ? 6 : 2})</label><input id="onlineBid" type="number" min="${isCaller ? 6 : 2}" max="13" value="${isCaller ? 6 : 2}" step="1"></div><button class="button primary" id="onlineBidBtn" type="button">Lock my bid</button>`}</div>`;
           if (s.hand && s.hand.length) content += `<div class="hand-area online-hand"><div class="hand-head"><h3>Your cards</h3><span>All four suits checked</span></div><div class="hand">${s.hand.map(card => onlineCardMarkup(card, -1, false)).join("")}</div></div>`;
         } else {
-          const countdown = s.deadline ? Math.max(0, Math.ceil((s.deadline - Date.now()) / 1000)) : null;
+          const msLeft = onlineMsLeft(s);
+          const countdown = msLeft === null ? null : Math.ceil(msLeft / 1000);
           const turnLabel = countdown === null ? "" : `<span class="timer-pill ${countdown <= 10 ? "urgent" : ""}">⏱ ${countdown}s</span>`;
           if (s.phase === "play" || s.phase === "trickEnd") {
-            content += `<div class="online-box"><h3>${s.phase === "trickEnd" ? "Baari complete" : "Baari in play"}</h3><p>${s.message || ""}</p>${turnLabel}<div class="table-center online-trick"><div class="table-info">${s.trump ? `${suitInfo(s.trump).symbol} ${suitName(s.trump)} is kaat` : "Kaat not chosen"}<br>${s.turn !== null ? `${names[s.turn]}'s turn` : "Next baari starting…"}</div><div class="trick-cards">${[0,1,2,3].map(seat => { const play = s.trick.find(item => item.seat === seat); return play ? `<div class="played">${onlineCardFace(play.card)}<span>${names[seat]}</span></div>` : `<div class="played"><div class="playing-card back"></div><span>${names[seat]}</span></div>`; }).join("")}</div></div></div>`;
+            const order = onlineSeat === null || onlineSeat === undefined ? [0, 1, 2, 3] : [1, 2, 0, 3].map(k => (onlineSeat + k) % 4);
+            content += `<div class="online-box"><h3>${s.phase === "trickEnd" ? "Baari complete" : "Baari in play"}</h3><p>${s.message || ""}</p>${turnLabel}<div class="table-center online-trick"><div class="table-info">${s.trump ? `${suitInfo(s.trump).symbol} ${suitName(s.trump)} is kaat` : "Kaat not chosen"}<br>${s.turn !== null ? `${names[s.turn]}'s turn` : "Next baari starting…"}</div><div class="trick-cards">${order.map(seat => { const play = s.trick.find(item => item.seat === seat); return play ? `<div class="played">${onlineCardFace(play.card)}<span>${names[seat]}</span></div>` : `<div class="played"><div class="playing-card back"></div><span>${names[seat]}</span></div>`; }).join("")}</div></div></div>`;
             if (s.phase === "play" && s.hand) {
               const leadSuit = s.trick.length ? s.trick[0].card.suit : null;
               const mustFollow = leadSuit && s.hand.some(card => card.suit === leadSuit);
@@ -776,12 +1003,16 @@
             }
           } else if (s.phase === "summary" || s.phase === "gameover") {
             const rows = names.map((name, seat) => `<tr><td>${name}${seat === s.caller ? " · caller" : ""}</td><td>${s.bids[seat]}</td><td>${s.tricks[seat]}</td><td>${s.tricks[seat] >= s.bids[seat] ? `+${s.bids[seat]}` : `−${s.bids[seat]}`}</td><td>${s.scores[seat]}</td></tr>`).join("");
-            content += `<div class="online-box"><h3>${s.phase === "gameover" ? `${names[s.matchWinner]} wins the match!` : `Hand ${s.handNo} complete`}</h3><p>${s.message}</p><table class="score-result"><thead><tr><th>Player</th><th>Bid</th><th>Ghar</th><th>Points</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>${isHost && s.phase === "summary" ? `<button class="button primary" id="onlineNextHandBtn" type="button">Deal next hand</button>` : ""}${isHost && s.phase === "gameover" ? `<button class="button primary" id="onlineRematchBtn" type="button">Start rematch</button>` : ""}</div>`;
+            content += `<div class="online-box"><h3>${s.phase === "gameover" ? `${names[s.matchWinner]} wins the match!` : `Hand ${s.handNo} complete`}</h3><p>${s.message}</p><table class="score-result"><thead><tr><th>Player</th><th>Bid</th><th>Ghar</th><th>Points</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>${s.phase === "summary" ? (isHost ? `<button class="button primary" id="onlineNextHandBtn" type="button">Deal next hand</button>` : `<p>Waiting for ${names[s.hostSeat]} to deal the next hand…</p>`) : ""}${s.phase === "gameover" ? (isHost ? `<button class="button primary" id="onlineRematchBtn" type="button">Start rematch</button>` : `<p>Waiting for ${names[s.hostSeat]} to start a rematch…</p>`) : ""}</div>`;
           }
           if (s.phase === "play" && s.bids) content += `<div class="bids">${names.map((name, seat) => `<div class="bid-chip">${name}<strong>${s.bids[seat]} ghar</strong></div>`).join("")}</div>`;
         }
         $("onlineScreen").innerHTML = `<section class="panel">${header(`Room ${s.code}`, `Hand ${s.handNo || 0} · ${s.message || "Online match"}`, s.phase === "waiting" ? "Waiting room" : `Hand ${s.handNo}`)}
-          <div class="panel-body">${content}${onlineError ? `<div class="online-status ${/could not|not valid|not reach|connection/i.test(onlineError) ? "online-error" : ""}" role="status">${onlineError}</div>` : ""}
+          <div class="panel-body">${content}
+          <div class="chat-panel"><button class="chat-toggle" id="chatToggle" type="button"><span>💬 Table chat</span><span class="chat-badge" hidden></span><span class="chat-chevron">▾</span></button>
+            <div class="chat-body" id="chatBody"><div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input-row"><input id="chatInput" maxlength="200" placeholder="Message the table…" autocomplete="off"><button class="button primary small" id="chatSend" type="button">Send</button></div></div>
+          </div>${onlineError ? `<div class="online-status ${/could not|not valid|not reach|connection/i.test(onlineError) ? "online-error" : ""}" role="status">${onlineError}</div>` : ""}
           <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="button" id="leaveOnlineBtn" type="button">Leave room</button><button class="button" id="backToSoloBtn" type="button">Back to solo game</button></div></div></section>`;
         if ($("onlineStartBtn")) $("onlineStartBtn").addEventListener("click", () => sendOnline({ type: "start_hand" }));
         if ($("copyRoomBtn")) $("copyRoomBtn").addEventListener("click", async () => {
@@ -800,16 +1031,24 @@
         if ($("leaveOnlineBtn")) $("leaveOnlineBtn").addEventListener("click", leaveOnlineRoom);
         if ($("backToSoloBtn")) $("backToSoloBtn").addEventListener("click", showSolo);
         $("onlineScreen").querySelectorAll("[data-online-card]").forEach(button => button.addEventListener("click", () => {
+          if (onlinePlayLock) return;
           const card = onlineState.hand[Number(button.dataset.onlineCard)];
-          if (card) sendOnline({ type: "play_card", card });
+          if (!card) return;
+          onlinePlayLock = true;
+          if (!sendOnline({ type: "play_card", card })) onlinePlayLock = false;
+        }));
+        $("onlineScreen").querySelectorAll("[data-kick]").forEach(button => button.addEventListener("click", () => {
+          sendOnline({ type: "kick", seat: Number(button.dataset.kick) });
         }));
         if (s.phase === "play" && s.deadline) onlineTimerInterval = setInterval(() => {
           const timer = $("onlineScreen").querySelector(".timer-pill");
           if (!timer || !onlineState || !onlineState.deadline) return;
-          const left = Math.max(0, Math.ceil((onlineState.deadline - Date.now()) / 1000));
+          const ms = onlineMsLeft(onlineState);
+          const left = ms === null ? 0 : Math.ceil(ms / 1000);
           timer.textContent = `⏱ ${left}s`;
           timer.classList.toggle("urgent", left <= 10);
         }, 250);
+        wireChatPanel();
       }
       function leaveOnlineRoom() {
         onlineIntent = false;
@@ -819,6 +1058,9 @@
         onlineRoomCode = "";
         onlineToken = "";
         onlineSeat = null;
+        onlineChat = [];
+        onlineChatUnread = 0;
+        onlineChatDraft = "";
         onlineError = "You left the room.";
         renderOnlineLobby();
       }
@@ -835,8 +1077,17 @@
 
       $("newGameBtn").addEventListener("click", startFreshMatch);
       $("playOnlineBtn").addEventListener("click", showOnline);
+      const muteBtn = $("muteBtn");
+      const paintMute = () => { muteBtn.textContent = sfxOn ? "🔊" : "🔇"; };
+      paintMute();
+      muteBtn.addEventListener("click", () => {
+        sfxOn = !sfxOn;
+        writeStorage(localStorage, "kaat.muted", sfxOn ? "0" : "1");
+        paintMute();
+        if (sfxOn) sfx("select");
+      });
       $("rulesBtn").addEventListener("click", () => {
-        const details = document.querySelector("details");
+        const details = $("rulesDetails");
         details.open = !details.open;
         details.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });

@@ -1,19 +1,64 @@
-# Kaat Card Game
+# Kaat Card Game 🃏
 
-The browser game is `Kaat Card Game.html` in the repository (the workspace copy is in `outputs/`). Solo play works as a local file. Online rooms need the Node.js server in this folder.
+A 4-player trick-taking card game. Play **solo** against three computer opponents, or open an **online room** and play with friends in real time — with table chat.
 
-## Run online mode locally
+## Screenshots
 
+| Lobby | Choose Kaat | Bidding |
+|---|---|---|
+| ![Game lobby](docs/screenshots/lobby.png) | ![Choose the kaat suit](docs/screenshots/call.png) | ![Bidding ghar](docs/screenshots/bid.png) |
+
+| Gameplay | Online room |
+|---|---|
+| ![Mid-hand gameplay](docs/screenshots/play.png) | ![Online room with table chat](docs/screenshots/online.png) |
+
+## Features
+
+**Solo mode — you vs 3 bots**
+- Three bot difficulties: Easy, Normal, Hard (Hard bots manage trumps, protect their bids and cash winners)
+- Bot bids stay hidden until you lock yours
+- Tap a card to select, tap again to play — no misclicks
+- Tricks auto-advance, last-trick review strip, card animations and sound effects (mutable)
+- Match stats saved across visits (hands, matches won, bid success %)
+
+**Online multiplayer** *(needs the Node server below)*
+- Room codes for 4 players; server deals, validates and scores
+- Table chat with unread badges, surviving reconnects
+- 60-second turn timer with auto-play; call/bid phases time out too, so rooms never stall
+- Host migration, kick for disconnected players, disconnected seats reopen for newcomers
+
+## Run it
+
+**Solo:** just open `Kaat Card Game.html` in any browser. No build, no server.
+
+**Online rooms (local):**
 1. Install Node.js 18 or newer.
-2. From this folder, run `npm install` once.
-3. Run `npm start` and keep that terminal open.
-4. Open `http://localhost:8080` in your browser, choose **Play online**, and create a room.
-5. To test with friends on the same Wi-Fi, they can use your computer’s local network address and port 8080. To play across the internet, deploy the app first and share the public page URL plus the room code.
+2. In this folder: `npm install` (once), then `npm start`.
+3. Open `http://localhost:8080`, choose **Play online**, create a room and share the code.
+4. Friends on the same Wi-Fi can join via your computer's local address, port 8080.
 
-The server deals and validates cards, enforces follow-suit, scores hands, and owns the 60-second turn deadline. When time runs out, it automatically plays the lowest legal card. Room state is held in server memory, so a server restart closes active rooms.
+**Online rooms (internet):** deploy with the included `render.yaml` (Render Blueprint), then open the public URL. The page connects over secure WebSockets automatically; or paste any `wss://` server address into the online lobby's server field.
 
-## Deploy
+Room state is held in server memory, so a server restart closes active rooms. The Render free web service can spin down after 15 minutes without incoming traffic; a new visit or WebSocket connection wakes it.
 
-`render.yaml` describes a Node web service that serves the game page and its WebSocket endpoint from the same public URL. Put this folder in a GitHub repository, then create a Render Blueprint from that repository. After the service is live, open its `https://…onrender.com` address and create a room. Friends open that same address and enter the room code. The client uses secure WebSockets automatically on HTTPS.
+## How to play
 
-The Render free web service can spin down after 15 minutes without incoming traffic; a new visit or WebSocket connection wakes it. Active WebSocket rooms are in memory and do not survive a service restart or redeploy.
+- 52 cards, 4 players, 13 cards each. Every deal is checked so each player holds at least one card of every suit.
+- The **caller** picks the **kaat** (trump) suit, bids at least **6 ghar**, and leads the first trick. Others bid at least **2**.
+- Follow the lead suit if you can; otherwise play kaat or any card. Kaat beats non-kaat; without kaat, highest lead-suit card wins the trick (*ghar* / *baari*).
+- Combined bids must reach **14** — short tables are raised by one in seat order.
+- Make your bid (or more) for **+bid** points; miss it for **−bid** points. First to **+21** wins the match (ties go to the highest score).
+
+The full rulebook is in `Kaat Card Game Rules.docx`.
+
+## Project structure
+
+| File | What it is |
+|---|---|
+| `Kaat Card Game.html` | The whole game client — solo mode and the online UI in one file |
+| `server.js` | Node.js + WebSocket server: rooms, dealing, validation, timers, chat relay |
+| `package.json` | Single dependency (`ws`) |
+| `render.yaml` | Render Blueprint for one-click deploy |
+| `Kaat Card Game Rules.docx` | Original rulebook |
+
+Environment knobs for the server: `PORT`, `TURN_MS`, `TRICK_PAUSE_MS`, `MAX_ROOMS`, `GHOST_SEAT_MS`.
